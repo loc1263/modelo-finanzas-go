@@ -15,11 +15,18 @@ type Config struct {
 
 	Output struct {
 		HTMLDir string `yaml:"html_dir"`
+		// Dias de retencion para los reporte_<timestamp>.html viejos (no
+		// afecta a reporte_ultimo.html, que siempre se conserva). <= 0
+		// desactiva el borrado automatico.
+		RetentionDays int `yaml:"retention_days"`
 	} `yaml:"output"`
 
 	Logging struct {
 		Dir  string `yaml:"dir"`
 		File string `yaml:"file"`
+		// Dias de retencion para los logs viejos (un archivo por dia,
+		// ver internal/logging). <= 0 desactiva el borrado automatico.
+		RetentionDays int `yaml:"retention_days"`
 	} `yaml:"logging"`
 
 	Universe struct {

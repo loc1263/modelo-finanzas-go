@@ -24,12 +24,14 @@ func main() {
 	resetToday := flag.Bool("reset-today", false, "borra los precios y resultados del dia de hoy antes de correr, para forzar una recorrida limpia")
 	flag.Parse()
 
+	now := time.Now()
+
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("cargando configuracion: %v", err)
 	}
 
-	logger, logFile, err := logging.New(cfg.Logging.Dir, cfg.Logging.File)
+	logger, logFile, err := logging.New(cfg.Logging.Dir, cfg.Logging.File, now, cfg.Logging.RetentionDays)
 	if err != nil {
 		log.Fatalf("iniciando logger: %v", err)
 	}
@@ -58,7 +60,7 @@ func main() {
 		Logger: logger,
 		Yahoo:  yc,
 		French: fc,
-		AsOf:   time.Now(),
+		AsOf:   now,
 	}
 
 	report, err := pl.Run(pipeline.Options{SkipFetch: *skipFetch, Limit: *limit, ResetToday: *resetToday})
@@ -68,16 +70,19 @@ func main() {
 
 	// Se guarda un archivo con timestamp (historial de corridas) y ademas se
 	// sobreescribe "reporte_ultimo.html" como puntero estable a la corrida mas reciente.
-	filename := "reporte_" + report.GeneratedAt.Format("20060102_150405") + ".html"
+	filename := html.ReportFilePrefix + report.GeneratedAt.Format(html.ReportTimestampLayout) + ".html"
 	path, err := html.Render(report, cfg.Output.HTMLDir, filename)
 	if err != nil {
 		logger.Fatalf("generando reporte HTML: %v", err)
 	}
-	if _, err := html.Render(report, cfg.Output.HTMLDir, "reporte_ultimo.html"); err != nil {
-		logger.Printf("AVISO: no se pudo actualizar reporte_ultimo.html: %v", err)
+	if _, err := html.Render(report, cfg.Output.HTMLDir, html.LatestReportFilename); err != nil {
+		logger.Printf("AVISO: no se pudo actualizar %s: %v", html.LatestReportFilename, err)
 	}
 
-	logger.Printf("Reporte generado en: %s (y reporte_ultimo.html)", path)
+	logger.Printf("Reporte generado en: %s (y %s)", path, html.LatestReportFilename)
+
+	html.PruneOldReports(cfg.Output.HTMLDir, report.GeneratedAt, cfg.Output.RetentionDays, logger)
+
 	logger.Println("=== Fin del pipeline ===")
 
 	if len(report.FailedFetches) > 0 {

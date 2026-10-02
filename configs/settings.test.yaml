@@ -7,10 +7,12 @@ database:
 
 output:
   html_dir: "output/test"
+  retention_days: 30
 
 logging:
   dir: "logs/test"
   file: "pipeline_test.log"
+  retention_days: 30
 
 universe:
   vanguard_etfs_csv: "configs/vanguard_etfs.csv"

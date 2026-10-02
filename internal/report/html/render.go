@@ -4,12 +4,26 @@ package html
 import (
 	_ "embed"
 	"html/template"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"modelofinanzas/internal/pipeline"
 	"modelofinanzas/internal/storage/sqlite"
+)
+
+// ReportFilePrefix y ReportTimestampLayout describen el patron de nombre
+// de los reportes con historial ("reporte_<timestamp>.html"). Exportados
+// para que cmd/pipeline/main.go arme el nombre del archivo con el mismo
+// formato que PruneOldReports sabe reconocer y limpiar, sin duplicar el
+// formato en los dos lugares.
+const (
+	ReportFilePrefix      = "reporte_"
+	ReportTimestampLayout = "20060102_150405"
+	LatestReportFilename  = "reporte_ultimo.html"
 )
 
 //go:embed templates/report.html.tmpl
@@ -116,4 +130,54 @@ func Render(report *pipeline.Report, outputDir, filename string) (string, error)
 	}
 
 	return path, nil
+}
+
+// PruneOldReports borra, dentro de outputDir, los "reporte_<timestamp>.html"
+// con mas de retentionDays dias (nunca borra reporte_ultimo.html, el
+// puntero estable a la corrida mas reciente). Un nombre que no calce
+// exactamente con el patron "reporte_YYYYMMDD_HHMMSS.html" se ignora
+// (defensivo: evita tocar archivos de otro origen que compartan la
+// carpeta). retentionDays <= 0 desactiva el borrado.
+//
+// No hace fallar al pipeline: los errores de borrado quedan logueados
+// como AVISO y se sigue con el resto.
+func PruneOldReports(outputDir string, now time.Time, retentionDays int, logger *log.Logger) {
+	if retentionDays <= 0 {
+		return
+	}
+
+	matches, err := filepath.Glob(filepath.Join(outputDir, ReportFilePrefix+"*.html"))
+	if err != nil {
+		if logger != nil {
+			logger.Printf("AVISO: no se pudieron listar reportes viejos: %v", err)
+		}
+		return
+	}
+
+	cutoff := now.AddDate(0, 0, -retentionDays)
+	for _, m := range matches {
+		name := filepath.Base(m)
+		if name == LatestReportFilename {
+			continue
+		}
+
+		ts := strings.TrimSuffix(strings.TrimPrefix(name, ReportFilePrefix), ".html")
+		t, err := time.Parse(ReportTimestampLayout, ts)
+		if err != nil {
+			continue // no calza con el patron exacto, no se toca
+		}
+		if !t.Before(cutoff) {
+			continue
+		}
+
+		if err := os.Remove(m); err != nil {
+			if logger != nil {
+				logger.Printf("AVISO: no se pudo borrar el reporte viejo %s: %v", m, err)
+			}
+			continue
+		}
+		if logger != nil {
+			logger.Printf("Borrado reporte viejo: %s", m)
+		}
+	}
 }

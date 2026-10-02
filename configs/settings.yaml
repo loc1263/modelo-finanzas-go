@@ -5,10 +5,16 @@ database:
 
 output:
   html_dir: "output"
+  # Reportes con mas de este numero de dias se borran solos en cada corrida
+  # (reporte_ultimo.html nunca se toca). <= 0 desactiva el borrado.
+  retention_days: 30
 
 logging:
   dir: "logs"
+  # Se le agrega la fecha (pipeline_2026-10-02.log); logs con mas de este
+  # numero de dias se borran solos en cada corrida. <= 0 desactiva el borrado.
   file: "pipeline.log"
+  retention_days: 30
 
 universe:
   vanguard_etfs_csv: "configs/vanguard_etfs.csv"

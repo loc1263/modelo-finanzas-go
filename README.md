@@ -63,8 +63,13 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
    completa paginada (10 tickers por pagina) debajo. Cada ticker, en el
    grafico y en la tabla, es un link directo a su pagina en Yahoo Finance.
    Arriba a la derecha hay un toggle de modo claro/oscuro (oscuro por
-   defecto), que recuerda la eleccion en el navegador.
-7. Escribe el detalle de cada paso en `logs/pipeline.log`.
+   defecto), que recuerda la eleccion en el navegador. Los `reporte_*.html`
+   con mas de `output.retention_days` dias (default 30) se borran solos en
+   cada corrida — `reporte_ultimo.html` nunca se toca.
+7. Escribe el detalle de cada paso en `logs/pipeline_<fecha>.log` (un
+   archivo por dia; corridas repetidas el mismo dia comparten archivo). Los
+   logs con mas de `logging.retention_days` dias (default 30) se borran
+   solos en cada corrida.
 
 Una corrida completa de todo el universo puede tardar bastante por las pausas
 entre requests (ver `yahoo.request_pause_ms` en la config) — es esperado y
