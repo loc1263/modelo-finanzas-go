@@ -112,21 +112,3 @@ func TestGetPrices_FiltersBySymbolAndRange(t *testing.T) {
 		t.Fatalf("len(got) = %d, want 1 (solo AAPL, solo el primer dia)", len(got))
 	}
 }
-
-func TestSetFetchStatus_Upserts(t *testing.T) {
-	db := openTestDB(t)
-	if err := db.SetFetchStatus("AAPL", "2026-01-01", "ok", ""); err != nil {
-		t.Fatalf("SetFetchStatus: %v", err)
-	}
-	if err := db.SetFetchStatus("AAPL", "2026-01-02", "ok", ""); err != nil {
-		t.Fatalf("SetFetchStatus (2do): %v", err)
-	}
-
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM fetch_status WHERE symbol = 'AAPL'`).Scan(&count); err != nil {
-		t.Fatalf("contando filas: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("count = %d, want 1 (symbol es PK, debe actualizar no insertar)", count)
-	}
-}

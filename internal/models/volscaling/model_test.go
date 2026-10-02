@@ -6,9 +6,10 @@ import (
 )
 
 func TestCompute_CapsAtOne(t *testing.T) {
-	// Volatilidad realizada muy baja -> el factor objetivo/realizada daria
-	// mas de 1, pero debe quedar topeado en 1 (sin apalancamiento).
-	returns := []float64{0.0001, -0.0001, 0.0001, -0.0001, 0.0001}
+	// Volatilidad realizada baja (pero por encima de common.MinMeaningfulVol)
+	// -> el factor objetivo/realizada daria mas de 1, pero debe quedar
+	// topeado en 1 (sin apalancamiento).
+	returns := []float64{0.003, -0.003, 0.003, -0.003, 0.003}
 	result, err := Compute(returns, 0.50) // objetivo absurdamente alto a proposito
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
@@ -37,5 +38,14 @@ func TestCompute_ReducesExposureWhenVolatile(t *testing.T) {
 func TestCompute_ZeroVolatilityErrors(t *testing.T) {
 	if _, err := Compute([]float64{0, 0, 0, 0}, 0.12); err == nil {
 		t.Error("esperaba error por volatilidad cero")
+	}
+}
+
+// TestCompute_BelowMinMeaningfulVolErrors cubre MEJ-020: una volatilidad
+// real pero muy por debajo del piso minimo debe tratarse igual que cero.
+func TestCompute_BelowMinMeaningfulVolErrors(t *testing.T) {
+	returns := []float64{0.0001, -0.0001, 0.0001, -0.0001, 0.0001}
+	if _, err := Compute(returns, 0.12); err == nil {
+		t.Error("esperaba error por volatilidad por debajo del piso minimo")
 	}
 }

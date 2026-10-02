@@ -77,16 +77,3 @@ func (db *DB) GetPrices(symbol string, start, end time.Time) ([]PriceBar, error)
 	}
 	return out, rows.Err()
 }
-
-// SetFetchStatus registra el resultado de intentar descargar un symbol, para
-// poder revisar fallas y evitar re-descargar lo ya obtenido en una corrida posterior.
-func (db *DB) SetFetchStatus(symbol, lastDate, status, message string) error {
-	_, err := db.Exec(`
-		INSERT INTO fetch_status (symbol, last_date, last_fetched_at, status, message)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(symbol) DO UPDATE SET
-			last_date=excluded.last_date, last_fetched_at=excluded.last_fetched_at,
-			status=excluded.status, message=excluded.message
-	`, symbol, lastDate, time.Now().UTC().Format(time.RFC3339), status, message)
-	return err
-}

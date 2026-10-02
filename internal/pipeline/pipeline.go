@@ -51,6 +51,35 @@ const (
 	earningsMaxQuarters = 4
 )
 
+// UniverseModel identifica un par (universo, modelo) de los que persiste
+// persistResults, usado por el flag -history de cmd/pipeline (MEJ-013) para
+// saber que consultar en model_results sin adivinar nombres sueltos.
+type UniverseModel struct {
+	Universe string
+	Model    string
+}
+
+// KnownUniverseModels devuelve, en el orden en que se calculan, todos los
+// pares (universo, modelo) que una corrida puede llegar a guardar en
+// model_results. ModelVolScaling (modelo 5) no aparece: es un resultado a
+// nivel de universo, no por simbolo, y no se persiste en esta tabla.
+func KnownUniverseModels() []UniverseModel {
+	return []UniverseModel{
+		{UniverseVanguardETF, ModelMomentum12_1},
+		{UniverseVanguardETF, ModelMax52w},
+		{UniverseMegacap, ModelMomentum12_1},
+		{UniverseMegacap, ModelMax52w},
+		{UniverseMegacap, ModelVolAdjusted},
+		{UniverseMegacap, ModelResidualMomentum},
+		{UniverseMegacap, ModelAbsoluteMomentum},
+		{UniverseMegacap, ModelAccelMomentum},
+		{UniverseMegacap, ModelFrogInThePan},
+		{UniverseMegacap, ModelSectorMomentum},
+		{UniverseMegacap, ModelLiquidityAdjusted},
+		{UniverseMegacap, ModelEarningsMomentum},
+	}
+}
+
 // Options controla el alcance de una corrida (util para pruebas rapidas).
 type Options struct {
 	SkipFetch  bool // si es true, no se descarga nada nuevo de Yahoo/French; usa lo que ya hay en la DB
@@ -262,7 +291,6 @@ func (p *Pipeline) fetchPrices(tickers []config.Ticker, start time.Time) []Fetch
 		bars, err := p.Yahoo.GetDailyHistory(t.Symbol, start, p.AsOf)
 		if err != nil {
 			p.Logger.Printf("FALLO descarga %s: %v", t.Symbol, err)
-			_ = p.DB.SetFetchStatus(t.Symbol, "", "error", err.Error())
 			mu.Lock()
 			failures = append(failures, FetchFailure{Symbol: t.Symbol, Error: err.Error()})
 			mu.Unlock()
@@ -270,7 +298,6 @@ func (p *Pipeline) fetchPrices(tickers []config.Ticker, start time.Time) []Fetch
 		}
 		if len(bars) == 0 {
 			p.Logger.Printf("AVISO %s: 0 barras devueltas", t.Symbol)
-			_ = p.DB.SetFetchStatus(t.Symbol, "", "empty", "0 barras devueltas")
 			return
 		}
 		if err := p.DB.UpsertBars(t.Symbol, bars); err != nil {
@@ -281,7 +308,6 @@ func (p *Pipeline) fetchPrices(tickers []config.Ticker, start time.Time) []Fetch
 			return
 		}
 		lastDate := bars[len(bars)-1].Date.Format("2006-01-02")
-		_ = p.DB.SetFetchStatus(t.Symbol, lastDate, "ok", "")
 		p.Logger.Printf("OK %s: %d barras (hasta %s)", t.Symbol, len(bars), lastDate)
 	})
 

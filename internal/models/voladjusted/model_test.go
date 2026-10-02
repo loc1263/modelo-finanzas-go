@@ -73,6 +73,22 @@ func TestCompute_ZeroVolatilityErrors(t *testing.T) {
 	}
 }
 
+// TestCompute_BelowMinMeaningfulVolErrors cubre MEJ-020: una volatilidad
+// real pero muy por debajo del piso minimo debe tratarse igual que cero, en
+// vez de producir un score desproporcionado al dividir por un numero casi nulo.
+func TestCompute_BelowMinMeaningfulVolErrors(t *testing.T) {
+	asOf := time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)
+	start := asOf.AddDate(-1, -2, 0)
+
+	// Oscilacion diaria minuscula (no cero): desvio estandar anualizado queda
+	// muy por debajo de common.MinMeaningfulVol pero no es exactamente 0.
+	bars := alternatingDailyBars(430, start, 100, 0.0001)
+
+	if _, err := Compute(bars, asOf, 12, 6, 252); err == nil {
+		t.Error("esperaba error por volatilidad por debajo del piso minimo")
+	}
+}
+
 func TestCompute_InsufficientHistory(t *testing.T) {
 	asOf := time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)
 	bars := alternatingDailyBars(60, asOf.AddDate(0, -2, 0), 100, 0.01) // solo 2 meses

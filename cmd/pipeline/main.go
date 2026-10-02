@@ -22,6 +22,7 @@ func main() {
 	skipFetch := flag.Bool("skip-fetch", false, "si esta presente, no descarga datos nuevos; usa lo que ya hay en la base")
 	limit := flag.Int("limit", 0, "si es > 0, limita la cantidad de tickers por universo (util para pruebas)")
 	resetToday := flag.Bool("reset-today", false, "borra los precios y resultados del dia de hoy antes de correr, para forzar una recorrida limpia")
+	historyDate := flag.String("history", "", "si esta presente (formato YYYY-MM-DD), no corre el pipeline: imprime en stdout los resultados ya guardados para ese dia y termina")
 	flag.Parse()
 
 	now := time.Now()
@@ -29,6 +30,19 @@ func main() {
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("cargando configuracion: %v", err)
+	}
+
+	if *historyDate != "" {
+		db, err := sqlite.Open(cfg.Database.Path)
+		if err != nil {
+			log.Fatalf("abriendo base de datos: %v", err)
+		}
+		defer db.Close()
+
+		if err := runHistory(db, *historyDate); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
 	}
 
 	logger, logFile, err := logging.New(cfg.Logging.Dir, cfg.Logging.File, now, cfg.Logging.RetentionDays)
@@ -52,7 +66,12 @@ func main() {
 		cfg.Yahoo.MaxRetries,
 		logger,
 	)
-	fc := famafrench.NewClient(time.Duration(cfg.Yahoo.TimeoutSeconds) * time.Second)
+	fc := famafrench.NewClient(
+		time.Duration(cfg.Yahoo.TimeoutSeconds)*time.Second,
+		time.Duration(cfg.Yahoo.RetryBackoffMs)*time.Millisecond,
+		cfg.Yahoo.MaxRetries,
+		logger,
+	)
 
 	pl := &pipeline.Pipeline{
 		Cfg:    cfg,

@@ -12,13 +12,11 @@ import (
 	"net/http/cookiejar"
 	"sync"
 	"time"
+
+	"modelofinanzas/internal/httpclient"
 )
 
 const chartURLTemplate = "https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d&events=div,splits"
-
-// browserUserAgent se manda en todos los requests: Yahoo exige un
-// User-Agent de navegador, sin esto algunas respuestas vienen vacias o con error.
-const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
 // Client descarga datos de Yahoo Finance: precios historicos (endpoint
 // publico, sin autenticacion) y earnings (endpoint que exige una sesion
@@ -83,7 +81,7 @@ func (c *Client) doRequest(url string) ([]Bar, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", browserUserAgent)
+	req.Header.Set("User-Agent", httpclient.BrowserUserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

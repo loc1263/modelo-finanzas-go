@@ -202,6 +202,14 @@ func AnnualizedVol(periodicReturns []float64, periodsPerYear float64) float64 {
 	return StdDev(periodicReturns) * math.Sqrt(periodsPerYear)
 }
 
+// MinMeaningfulVol es el piso minimo de volatilidad anualizada (en fraccion,
+// ej. 0.01 = 1%) por debajo del cual un modelo que divide por volatilidad
+// debe tratarla como si fuera cero, en vez de dividir por un numero casi nulo.
+// Una accion con volatilidad real pero muy baja en la ventana (no exactamente
+// cero) puede producir un score desproporcionado que es un artefacto numerico,
+// no un reflejo real de momentum.
+const MinMeaningfulVol = 0.01
+
 // Sum suma los elementos de una serie.
 func Sum(xs []float64) float64 {
 	s := 0.0

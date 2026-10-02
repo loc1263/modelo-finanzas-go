@@ -9,11 +9,15 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"modelofinanzas/internal/httpclient"
 )
 
 const zipURLTemplate = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/%s_CSV.zip"
@@ -27,33 +31,63 @@ type MonthlyFactors struct {
 
 // Client descarga datasets de la Kenneth French Data Library.
 type Client struct {
-	httpClient *http.Client
+	httpClient   *http.Client
+	MaxRetries   int
+	RetryBackoff time.Duration
+	Logger       *log.Logger
+
+	// urlTemplate es zipURLTemplate por defecto; los tests lo pisan para
+	// apuntar a un httptest.Server en vez de Dartmouth.
+	urlTemplate string
 }
 
-func NewClient(timeout time.Duration) *Client {
-	return &Client{httpClient: &http.Client{Timeout: timeout}}
+// NewClient crea un cliente con reintento-con-backoff, reusando el mismo
+// patron que internal/yahoo.Client (MEJ-011): una falla de red momentanea
+// al bajar un dataset no deberia abortar la corrida entera.
+func NewClient(timeout, retryBackoff time.Duration, maxRetries int, logger *log.Logger) *Client {
+	return &Client{
+		httpClient:   &http.Client{Timeout: timeout},
+		MaxRetries:   maxRetries,
+		RetryBackoff: retryBackoff,
+		Logger:       logger,
+		urlTemplate:  zipURLTemplate,
+	}
 }
 
 var monthlyDateRe = regexp.MustCompile(`^\d{6}$`)
 
-// GetMonthly descarga el dataset (ej. "F-F_Research_Data_Factors") y
-// devuelve unicamente la seccion mensual, con los valores ya divididos por 100.
+// GetMonthly descarga el dataset (ej. "F-F_Research_Data_Factors"),
+// reintentando con backoff ante errores transitorios, y devuelve unicamente
+// la seccion mensual, con los valores ya divididos por 100.
 func (c *Client) GetMonthly(dataset string) ([]MonthlyFactors, error) {
-	csvBytes, err := c.downloadCSV(dataset)
-	if err != nil {
-		return nil, fmt.Errorf("famafrench: %s: %w", dataset, err)
+	var lastErr error
+	for attempt := 0; attempt <= c.MaxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := c.RetryBackoff * time.Duration(attempt)
+			if c.Logger != nil {
+				c.Logger.Printf("[famafrench] %s: reintento %d/%d tras error (%v), esperando %s", dataset, attempt, c.MaxRetries, lastErr, backoff)
+			}
+			time.Sleep(backoff)
+		}
+
+		csvBytes, err := c.downloadCSV(dataset)
+		if err == nil {
+			return parseMonthly(csvBytes)
+		}
+		lastErr = err
 	}
-	return parseMonthly(csvBytes)
+
+	return nil, fmt.Errorf("famafrench: %s: agotados los reintentos: %w", dataset, lastErr)
 }
 
 func (c *Client) downloadCSV(dataset string) ([]byte, error) {
-	url := fmt.Sprintf(zipURLTemplate, dataset)
+	url := fmt.Sprintf(c.urlTemplate, dataset)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+	req.Header.Set("User-Agent", httpclient.BrowserUserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -74,17 +108,44 @@ func (c *Client) downloadCSV(dataset string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("abriendo zip: %w", err)
 	}
-	if len(zr.File) == 0 {
-		return nil, fmt.Errorf("zip vacio")
+
+	csvFile, err := findCSVFile(zr)
+	if err != nil {
+		return nil, err
 	}
 
-	f, err := zr.File[0].Open()
+	f, err := csvFile.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
 	return io.ReadAll(f)
+}
+
+// findCSVFile busca el unico archivo .csv dentro del zip (en vez de asumir
+// que es el primero por posicion, ver MEJ-016). Dartmouth hoy siempre
+// empaqueta un solo archivo, pero si eso cambiara (ej. agregan un README) es
+// mejor fallar con un mensaje claro que leer el archivo equivocado.
+func findCSVFile(zr *zip.Reader) (*zip.File, error) {
+	var matches []*zip.File
+	for _, f := range zr.File {
+		if strings.EqualFold(filepath.Ext(f.Name), ".csv") {
+			matches = append(matches, f)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("el zip no contiene ningun archivo .csv")
+	case 1:
+		return matches[0], nil
+	default:
+		names := make([]string, len(matches))
+		for i, f := range matches {
+			names[i] = f.Name
+		}
+		return nil, fmt.Errorf("el zip contiene mas de un archivo .csv: %s", strings.Join(names, ", "))
+	}
 }
 
 // parseMonthly busca la fila de encabezado (la que empieza con ",") y luego

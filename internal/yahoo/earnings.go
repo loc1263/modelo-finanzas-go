@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"modelofinanzas/internal/httpclient"
 )
 
 // A diferencia de v8/finance/chart (precios), el endpoint de earnings
@@ -108,7 +110,7 @@ func (c *Client) ensureCrumb(forceRefresh bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", browserUserAgent)
+	req.Header.Set("User-Agent", httpclient.BrowserUserAgent)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("pidiendo cookie de sesion: %w", err)
@@ -120,7 +122,7 @@ func (c *Client) ensureCrumb(forceRefresh bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req2.Header.Set("User-Agent", browserUserAgent)
+	req2.Header.Set("User-Agent", httpclient.BrowserUserAgent)
 	resp2, err := c.httpClient.Do(req2)
 	if err != nil {
 		return "", fmt.Errorf("pidiendo crumb: %w", err)
@@ -153,7 +155,7 @@ func (c *Client) doEarningsRequest(symbol, crumb string) ([]EarningsQuarter, err
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", browserUserAgent)
+	req.Header.Set("User-Agent", httpclient.BrowserUserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

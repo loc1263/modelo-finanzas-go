@@ -25,7 +25,7 @@ type Result struct {
 // la cartera (o universo) de referencia y la volatilidad anual objetivo.
 func Compute(portfolioDailyReturns []float64, targetVolAnnual float64) (Result, error) {
 	vol := common.AnnualizedVol(portfolioDailyReturns, 252)
-	if vol == 0 {
+	if vol < common.MinMeaningfulVol {
 		return Result{}, errZeroVol
 	}
 
@@ -40,4 +40,4 @@ func Compute(portfolioDailyReturns []float64, targetVolAnnual float64) (Result, 
 	return Result{RealizedVolAnnual: vol, ScalingFactor: factor}, nil
 }
 
-var errZeroVol = errors.New("volatilidad realizada es cero o datos insuficientes")
+var errZeroVol = errors.New("volatilidad realizada es cero, insuficiente o por debajo del piso minimo")

@@ -3,6 +3,7 @@ package html
 
 import (
 	_ "embed"
+	"fmt"
 	"html/template"
 	"log"
 	"math"
@@ -71,10 +72,7 @@ var funcMap = template.FuncMap{
 // creciendo desde cero hacia la derecha (score positivo) o hacia la
 // izquierda (score negativo) — ver internal/report/html/templates.
 func buildChartTab(id string, results []sqlite.ModelResult, names map[string]string) ChartTab {
-	n := len(results)
-	if n > 5 {
-		n = 5
-	}
+	n := min(len(results), 5)
 	top := results[:n]
 
 	maxAbs := 0.0
@@ -108,6 +106,13 @@ func buildChartTab(id string, results []sqlite.ModelResult, names map[string]str
 }
 
 // Render escribe el reporte HTML de report en outputDir/filename.
+//
+// Escribe primero a un archivo temporal en el mismo directorio y recien lo
+// mueve (os.Rename, atomico dentro del mismo volumen) al nombre final si
+// tmpl.Execute no fallo. Esto importa sobre todo para "reporte_ultimo.html"
+// (el puntero estable que documenta el README): sin esto, un error a mitad
+// de la escritura del template dejaria ese archivo truncado/corrupto hasta
+// la proxima corrida exitosa.
 func Render(report *pipeline.Report, outputDir, filename string) (string, error) {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return "", err
@@ -119,14 +124,26 @@ func Render(report *pipeline.Report, outputDir, filename string) (string, error)
 	}
 
 	path := filepath.Join(outputDir, filename)
-	f, err := os.Create(path)
+
+	tmp, err := os.CreateTemp(outputDir, ".tmp-"+filename+"-*")
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	tmpPath := tmp.Name()
+	// Si el rename de abajo tiene exito, esto es un no-op (el archivo ya no
+	// esta en tmpPath); si algo falla antes, limpia el temporal a medio escribir.
+	defer os.Remove(tmpPath)
 
-	if err := tmpl.Execute(f, report); err != nil {
+	if err := tmpl.Execute(tmp, report); err != nil {
+		tmp.Close()
+		return "", fmt.Errorf("renderizando template: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
 		return "", err
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return "", fmt.Errorf("moviendo reporte a destino final: %w", err)
 	}
 
 	return path, nil

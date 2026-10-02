@@ -33,8 +33,8 @@ func Compute(bars []sqlite.PriceBar, asOf time.Time, longMonths, shortMonths, vo
 	dailyBars := common.ExcludeCurrentMonth(bars, asOf)
 	window := common.LastNBars(dailyBars, volLookbackDays)
 	vol := common.AnnualizedVol(common.DailyReturns(window), 252)
-	if vol == 0 {
-		return 0, fmt.Errorf("volatilidad cero o datos insuficientes")
+	if vol < common.MinMeaningfulVol {
+		return 0, fmt.Errorf("volatilidad cero, insuficiente o por debajo del piso minimo")
 	}
 
 	return ((rLong / vol) + (rShort / vol)) / 2, nil

@@ -22,7 +22,8 @@ implementado) y de los factores de Fama-French.
 ## Estructura del proyecto
 
 ```
-cmd/pipeline/           Comando principal (main.go)
+cmd/pipeline/           Comando principal (main.go, history.go)
+internal/httpclient/    User-Agent de navegador compartido por yahoo y famafrench
 internal/yahoo/         Cliente HTTP para la API publica de Yahoo Finance
 internal/famafrench/    Descarga y parseo de los datasets de Kenneth French
 internal/storage/sqlite Persistencia (precios, factores, resultados)
@@ -71,6 +72,12 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
    logs con mas de `logging.retention_days` dias (default 30) se borran
    solos en cada corrida.
 
+Antes de arrancar a descargar nada, el pipeline valida `settings.yaml`
+(rutas requeridas no vacias, valores numericos no negativos, relaciones
+entre lookbacks de los modelos) y falla con un unico error claro si algo
+esta mal configurado, en vez de fallar modelo por modelo o ticker por
+ticker mas adelante.
+
 Una corrida completa de todo el universo puede tardar bastante por las pausas
 entre requests (ver `yahoo.request_pause_ms` en la config) — es esperado y
 necesario para no ser bloqueado por Yahoo. Para acelerarla sin perder esa
@@ -90,6 +97,7 @@ vuelve al comportamiento 100% secuencial.
 | `-skip-fetch`   | `false`                   | No descarga nada nuevo; recalcula los modelos con lo que ya hay en la base. Util para iterar rapido sobre la logica de los modelos. |
 | `-limit`        | `0` (sin limite)          | Si es > 0, usa solo los primeros N tickers de cada universo. Util para pruebas rapidas. |
 | `-reset-today`  | `false`                   | Borra los precios y resultados **del dia de hoy** antes de correr, forzando una recorrida 100% limpia de hoy (ver mas abajo). |
+| `-history`      | `""` (desactivado)        | Si se pasa una fecha `YYYY-MM-DD`, no corre el pipeline: imprime en stdout los resultados ya guardados en `model_results` para ese dia (uno por universo/modelo), o un aviso si no hay nada guardado para esa fecha. |
 
 Ejemplos:
 
@@ -103,6 +111,9 @@ go run ./cmd/pipeline -limit 5
 # Forzar una redescarga limpia de hoy (por ejemplo, si una corrida anterior
 # quedo con datos parciales o Yahoo devolvio algo raro)
 go run ./cmd/pipeline -reset-today
+
+# Ver los resultados guardados de una corrida pasada, sin volver a correr nada
+go run ./cmd/pipeline -history 2026-09-25
 ```
 
 ### Reejecucion / idempotencia
@@ -119,7 +130,7 @@ datos duplicados:
   hora exacta). Reejecutar el pipeline el mismo dia sobreescribe los
   resultados de ese dia en vez de agregar filas nuevas. Los resultados de
   dias anteriores quedan intactos, por lo que la tabla sirve tambien como
-  historial dia a dia.
+  historial dia a dia — consultable con `-history YYYY-MM-DD` (ver arriba).
 - **Factores de Fama-French** (`factors`): clave `(dataset, date, factor)`,
   tambien UPSERT — no se duplican al reejecutar.
 - **Earnings** (`earnings`, modelo 8): clave `(symbol, quarter)`, tambien
