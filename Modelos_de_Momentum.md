@@ -6,10 +6,10 @@ general del proyecto ver [`Descripcion_Proyecto.md`](Descripcion_Proyecto.md);
 para cómo correr el pipeline, [`README.md`](README.md).
 
 Se aplican los modelos 1 y 2 a los ETFs de Vanguard, y los modelos 1 al 11
-a las acciones mega-cap de EEUU (el modelo 8 está pendiente, ver su
-sección). Todos los modelos siguen la misma convención: nunca miran el mes
-calendario en curso (incompleto), solo el último mes completo anterior a la
-fecha de la corrida — ver `internal/models/common/returns.go`.
+a las acciones mega-cap de EEUU. Todos los modelos siguen la misma
+convención: nunca miran el mes calendario en curso (incompleto), solo el
+último mes completo anterior a la fecha de la corrida — ver
+`internal/models/common/returns.go`.
 
 
 
@@ -195,29 +195,49 @@ score: mide lo mismo que el signo/umbral del paper (¿la acción le ganó a
 
 
 
-## 8. Momentum de Fundamentos / Earnings Momentum — pendiente
+## 8. Momentum de Fundamentos / Earnings Momentum
 
-**Chan, Jegadeesh y Lakonishok (1996).**
+**Chan, Jegadeesh y Lakonishok (1996).** Paquete:
+`internal/models/earningsmomentum`.
 
-Ordena por la sorpresa y revisión de las estimaciones de ganancias
-(earnings) de los analistas: las acciones cuyas ganancias reportadas o
-esperadas vienen sorprendiendo al alza tienden a seguir haciéndolo por un
-tiempo.
+Ordena por la sorpresa de ganancias (earnings): las acciones cuyas
+ganancias reportadas vienen sorprendiendo al alza a los analistas tienden a
+seguir haciéndolo por un tiempo (post-earnings-announcement drift).
 
-**Estado: no implementado.** Este modelo necesita datos de earnings y
-estimados de analistas (sorpresas, revisiones), que no vienen en el
-endpoint de precios que usa el resto del proyecto
-(`query1.finance.yahoo.com/v8/finance/chart`). El endpoint de Yahoo que sí
-tiene esos datos (`v10/finance/quoteSummary`, módulos `earningsTrend` /
-`earningsHistory`) exige un "crumb" de sesión autenticada — se probó
-empíricamente y devuelve `{"error":{"code":"Unauthorized","description":"Invalid Crumb"}}`
-sin él. No hay forma gratuita y confiable de bajar esto con la
-infraestructura actual (ídem el motivo por el que se descartó
-`piquette/finance-go`, ver `CLAUDE.md`).
+**De donde salen los datos:** el endpoint de precios que usa el resto del
+proyecto (`v8/finance/chart`) no tiene earnings ni estimados. El que si los
+tiene es `v10/finance/quoteSummary` (modulo `earningsHistory`), pero a
+diferencia de los precios, **exige una sesion autenticada**: primero hay
+que pedir una cookie de sesion a `fc.yahoo.com`, y con esa cookie pedir un
+token "crumb" a `query1.finance.yahoo.com/v1/test/getcrumb`, que despues se
+manda como parametro en cada request a `quoteSummary`. Es el mismo
+mecanismo que usa `yfinance` (Python) por debajo. Se verifico a mano con
+`curl` antes de implementarlo (el endpoint devuelve
+`{"error":{"code":"Unauthorized","description":"Invalid Crumb"}}` si se lo
+llama directo, sin el paso de la cookie+crumb primero) — esta implementado
+en `internal/yahoo/earnings.go`, con el mismo cliente HTTP (y su cookie
+jar) que usa `internal/yahoo/client.go` para los precios.
 
-Si en el futuro se consigue una fuente de datos de earnings (de pago, o un
-archivo propio), el modelo se puede agregar como un paquete más en
-`internal/models/` siguiendo el mismo patrón que los demás.
+**Importante — esto es mas fragil que el resto del pipeline:** Yahoo no
+documenta oficialmente este mecanismo, asi que podria cambiarlo sin aviso
+en cualquier momento (es la misma clase de riesgo que hizo que se
+descartara `piquette/finance-go`, ver `CLAUDE.md`). Si en algun momento
+este modelo empieza a fallar para todos los tickers con un error de
+"crumb" o "cookie" invalido, revisar primero con `curl` si Yahoo cambio el
+flujo, antes de asumir que es un bug del codigo.
+
+**Implementacion:** version simplificada de las "Standardized Unexpected
+Earnings" (SUE) academicas. En vez de la sorpresa en dolares de EPS
+dividida por el precio o por la dispersion de estimados, se usa
+directamente el `surprisePercent` que reporta Yahoo (sorpresa como % del
+EPS estimado) en los ultimos trimestres disponibles (tipicamente 4): el
+score es el promedio de esas sorpresas, dividido por su desviacion
+estandar cuando hay suficiente variacion (mismo patron que el modelo 4,
+momentum residual). Los datos se guardan en la tabla `earnings` de SQLite
+(simbolo + trimestre + EPS real/estimado/sorpresa), igual que los precios y
+los factores de Fama-French — a diferencia de los precios, siempre se
+refrescan en cada corrida sin `-skip-fetch` (son pocos requests, no hace
+falta cachear por dia).
 
 
 

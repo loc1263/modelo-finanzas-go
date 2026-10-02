@@ -4,7 +4,7 @@ Pipeline 100% Go que descarga datos de la API gratuita de Yahoo Finance y de
 la Kenneth R. French Data Library, y aplica modelos de momentum sobre:
 
 - **ETFs de Vanguard** (modelos 1 y 2)
-- **Acciones mega-cap de EEUU** (modelos 1 a 11 — el modelo 8 esta pendiente)
+- **Acciones mega-cap de EEUU** (modelos 1 a 11)
 
 El resultado es un reporte HTML con el ranking de cada modelo.
 
@@ -48,13 +48,13 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
 1. Descarga precios diarios de ~6 anios para todos los tickers de
    `configs/vanguard_etfs.csv` y `configs/megacap_stocks.csv`, con una pausa
    entre requests para no bloquear la API gratuita de Yahoo.
-2. Descarga los factores mensuales de Fama-French (3 factores, 5 factores y
+2. Descarga el historial de earnings (EPS real vs. estimado) de las
+   mega-caps, para el modelo 8.
+3. Descarga los factores mensuales de Fama-French (3 factores, 5 factores y
    momentum) desde la Kenneth French Data Library.
-3. Calcula los modelos 1 y 2 para los ETFs, y 1 a 11 para las mega-caps (el
-   modelo 8, earnings momentum, queda pendiente — ver
-   [`Modelos_de_Momentum.md`](Modelos_de_Momentum.md)).
-4. Guarda todo en `data/modelo_finanzas.db` (SQLite).
-5. Genera `output/reporte_<timestamp>.html` y actualiza
+4. Calcula los modelos 1 y 2 para los ETFs, y 1 a 11 para las mega-caps.
+5. Guarda todo en `data/modelo_finanzas.db` (SQLite).
+6. Genera `output/reporte_<timestamp>.html` y actualiza
    `output/reporte_ultimo.html` (siempre apunta a la corrida mas reciente).
    Cada modelo muestra el autor/paper entre parentesis en el titulo, un
    icono "?" que al pasar el mouse o hacer click despliega un resumen de que
@@ -62,7 +62,9 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
    tooltip del nombre de la empresa/fondo al pasar el mouse), y la tabla
    completa paginada (10 tickers por pagina) debajo. Cada ticker, en el
    grafico y en la tabla, es un link directo a su pagina en Yahoo Finance.
-6. Escribe el detalle de cada paso en `logs/pipeline.log`.
+   Arriba a la derecha hay un toggle de modo claro/oscuro (oscuro por
+   defecto), que recuerda la eleccion en el navegador.
+7. Escribe el detalle de cada paso en `logs/pipeline.log`.
 
 Una corrida completa de todo el universo puede tardar bastante por las pausas
 entre requests (ver `yahoo.request_pause_ms` en la config) — es esperado y
@@ -108,6 +110,9 @@ datos duplicados:
   historial dia a dia.
 - **Factores de Fama-French** (`factors`): clave `(dataset, date, factor)`,
   tambien UPSERT — no se duplican al reejecutar.
+- **Earnings** (`earnings`, modelo 8): clave `(symbol, quarter)`, tambien
+  UPSERT. A diferencia de precios y factores, se vuelve a descargar en cada
+  corrida sin `-skip-fetch` (son pocos requests, no hace falta cachear por dia).
 - Si necesitas garantizar un estado 100% limpio del dia (por ejemplo, Yahoo
   devolvio datos incompletos en una corrida anterior), usa `-reset-today`:
   borra los precios y resultados de hoy antes de volver a descargar y
@@ -153,10 +158,10 @@ cada paquete en `internal/models/`. Dos convenciones transversales:
 - **Convencion "12-1" global**: todos los modelos anclan sus calculos al
   ultimo mes calendario **completo** anterior a la fecha de la corrida (nunca
   miran el mes en curso, que esta incompleto).
-- **Modelo 8 (earnings momentum) pendiente**: necesita datos de earnings y
-  estimados de analistas que Yahoo no entrega gratis sin autenticacion (se
-  verifico empiricamente). Ver `Modelos_de_Momentum.md` para el detalle y
-  que haria falta para implementarlo.
+- **Modelo 8 (earnings momentum)**: usa un endpoint de Yahoo distinto al de
+  precios, que exige una sesion autenticada (cookie + "crumb") en vez de
+  ser totalmente publico — ver la seccion "Datos y fuentes" mas abajo y
+  `Modelos_de_Momentum.md` para el detalle y el riesgo de fragilidad.
 
 ## Datos y fuentes
 
@@ -166,3 +171,10 @@ cada paquete en `internal/models/`. Dos convenciones transversales:
   bloqueado.
 - Factores de Fama-French: Kenneth R. French Data Library (Dartmouth), en
   `internal/famafrench`.
+- Earnings (modelo 8): `query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}`
+  (modulo `earningsHistory`). A diferencia de los precios, este endpoint
+  exige una sesion autenticada (cookie + "crumb" de Yahoo, el mismo
+  mecanismo que usa `yfinance` por debajo) — implementado en
+  `internal/yahoo/earnings.go`. No esta documentado oficialmente por Yahoo,
+  asi que es mas fragil que el resto del pipeline; ver
+  `Modelos_de_Momentum.md` si empieza a fallar.

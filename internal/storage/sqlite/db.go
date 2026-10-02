@@ -41,6 +41,17 @@ CREATE TABLE IF NOT EXISTS factors (
 	PRIMARY KEY (dataset, date, factor)
 );
 
+-- Historial trimestral de EPS real vs. estimado (modelo 8, momentum de
+-- earnings). quarter es la fecha de cierre del trimestre que informa Yahoo.
+CREATE TABLE IF NOT EXISTS earnings (
+	symbol        TEXT NOT NULL,
+	quarter       TEXT NOT NULL,
+	eps_actual    REAL,
+	eps_estimate  REAL,
+	surprise_pct  REAL,
+	PRIMARY KEY (symbol, quarter)
+);
+
 -- run_date (no la hora exacta) es parte de la clave: si el pipeline se
 -- corre varias veces el mismo dia, la corrida mas reciente sobreescribe
 -- (UPSERT) los resultados de ese dia en vez de acumular filas duplicadas.

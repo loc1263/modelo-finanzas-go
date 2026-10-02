@@ -3,61 +3,127 @@
 <head>
 <meta charset="UTF-8">
 <title>Reporte de Momentum — ETFs Vanguard y Mega-Caps</title>
+<script>
+// Aplica el tema guardado ANTES de pintar la pagina, para que no haya un
+// parpadeo (flash) del tema por defecto al cargar para quien ya eligio claro.
+(function () {
+	try {
+		if (localStorage.getItem('theme') === 'light') {
+			document.documentElement.setAttribute('data-theme', 'light');
+		}
+	} catch (e) {}
+})();
+</script>
 <style>
-	body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; padding: 2rem; background: #0b0e14; color: #e6e6e6; }
+	:root {
+		/* Oscuro = tema por defecto */
+		--bg-page: #0b0e14;
+		--surface-1: #131722;
+		--surface-2: #1f2430;
+		--surface-3: #2a3142;
+		--border: #2a2f3a;
+		--row-alt: #0f1420;
+		--text-primary: #e6e6e6;
+		--text-secondary: #9fb3c8;
+		--text-tertiary: #6c7a8c;
+		--text-popover: #cfd6e0;
+		--score-pos: #7ee787;
+		--score-neg: #ff7b72;
+		--warning: #ffab70;
+		--baseline: #3a4150;
+		--popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+	}
+	:root[data-theme="light"] {
+		--bg-page: #f6f7f9;
+		--surface-1: #ffffff;
+		--surface-2: #eef0f3;
+		--surface-3: #e2e5ea;
+		--border: #d8dce2;
+		--row-alt: #f5f6f8;
+		--text-primary: #1a1f29;
+		--text-secondary: #51607a;
+		--text-tertiary: #717d8f;
+		--text-popover: #2c3645;
+		--score-pos: #1a7f37;
+		--score-neg: #cf222e;
+		--warning: #9a5b13;
+		--baseline: #c7cdd6;
+		--popover-shadow: 0 8px 24px rgba(20, 23, 30, 0.12);
+	}
+
+	body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; padding: 2rem; background: var(--bg-page); color: var(--text-primary); transition: background .15s ease, color .15s ease; }
 	h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
-	h2 { margin-top: 2.5rem; border-bottom: 1px solid #2a2f3a; padding-bottom: 0.4rem; }
-	h3 { color: #9fb3c8; margin-top: 2rem; }
-	.author { color: #6c7a8c; font-weight: 400; font-size: 0.85em; }
-	.meta { color: #9fb3c8; font-size: 0.9rem; margin-bottom: 1.5rem; }
+	h2 { margin-top: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+	h3 { color: var(--text-secondary); margin-top: 2rem; }
+	.author { color: var(--text-tertiary); font-weight: 400; font-size: 0.85em; }
+	.meta { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem; }
 	table { border-collapse: collapse; width: 100%; margin: 1rem 0 0.5rem; font-size: 0.9rem; }
-	th, td { text-align: left; padding: 0.4rem 0.7rem; border-bottom: 1px solid #1f2430; }
-	th { color: #9fb3c8; font-weight: 600; background: #131722; }
-	tr:nth-child(odd) td { background: #0f1420; }
+	th, td { text-align: left; padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--surface-2); }
+	th { color: var(--text-secondary); font-weight: 600; background: var(--surface-1); }
+	tr:nth-child(odd) td { background: var(--row-alt); }
 	tr.top td { font-weight: 600; }
-	.score-pos { color: #7ee787; }
-	.score-neg { color: #ff7b72; }
-	.card { background: #131722; border: 1px solid #2a2f3a; border-radius: 8px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
-	.failures { color: #ffab70; font-size: 0.85rem; }
-	code { background: #1f2430; padding: 0.1rem 0.3rem; border-radius: 4px; }
-	a.ticker-link { color: #e6e6e6; text-decoration: none; }
-	a.ticker-link:hover code { background: #2a3142; }
+	.score-pos { color: var(--score-pos); }
+	.score-neg { color: var(--score-neg); }
+	.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+	.failures { color: var(--warning); font-size: 0.85rem; }
+	code { background: var(--surface-2); padding: 0.1rem 0.3rem; border-radius: 4px; }
+	a.ticker-link { color: var(--text-primary); text-decoration: none; }
+	a.ticker-link:hover code { background: var(--surface-3); }
 	a.ticker-link:hover { text-decoration: underline; }
-	.note { color: #9fb3c8; font-size: 0.85rem; }
-	.pagination { display: flex; align-items: center; gap: 0.8rem; margin: 0 0 2rem; font-size: 0.85rem; color: #9fb3c8; }
-	.pagination button { background: #131722; color: #e6e6e6; border: 1px solid #2a2f3a; border-radius: 6px; padding: 0.3rem 0.8rem; cursor: pointer; font-size: 0.85rem; }
-	.pagination button:hover:not(:disabled) { background: #1f2430; }
+	.note { color: var(--text-secondary); font-size: 0.85rem; }
+	.pagination { display: flex; align-items: center; gap: 0.8rem; margin: 0 0 2rem; font-size: 0.85rem; color: var(--text-secondary); }
+	.pagination button { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.8rem; cursor: pointer; font-size: 0.85rem; }
+	.pagination button:hover:not(:disabled) { background: var(--surface-2); }
 	.pagination button:disabled { opacity: 0.4; cursor: default; }
+
+	/* Toggle claro/oscuro */
+	.theme-toggle { position: fixed; top: 1rem; right: 1.2rem; z-index: 80; display: inline-flex; align-items: center; gap: 0.45rem; background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 999px; padding: 0.4rem 0.8rem 0.4rem 0.6rem; font-size: 0.8rem; font-family: inherit; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); }
+	.theme-toggle:hover { background: var(--surface-2); }
+	.theme-toggle svg { width: 15px; height: 15px; flex: 0 0 15px; }
+	.theme-toggle .icon-moon { display: none; }
+	:root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+	:root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
 
 	/* Mini-grafico de top 5 por modelo */
 	.mini-chart { display: flex; flex-direction: column; gap: 7px; margin: 0.9rem 0 1.6rem; }
 	.chart-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; }
-	.chart-ticker-link { flex: 0 0 58px; color: #e6e6e6; text-decoration: none; font-weight: 600; }
-	.chart-ticker-link:hover, .chart-ticker-link:focus-visible { color: #9fb3c8; text-decoration: underline; }
+	.chart-ticker-link { flex: 0 0 58px; color: var(--text-primary); text-decoration: none; font-weight: 600; }
+	.chart-ticker-link:hover, .chart-ticker-link:focus-visible { color: var(--text-secondary); text-decoration: underline; }
 	.chart-track { flex: 1; display: flex; align-items: center; height: 18px; }
 	.chart-half { flex: 1; display: flex; height: 100%; }
 	.chart-half-neg { justify-content: flex-end; }
 	.chart-half-pos { justify-content: flex-start; }
-	.chart-baseline { width: 1px; flex: 0 0 1px; align-self: stretch; background: #3a4150; }
+	.chart-baseline { width: 1px; flex: 0 0 1px; align-self: stretch; background: var(--baseline); }
 	.chart-bar { display: block; height: 16px; min-width: 3px; text-decoration: none; transition: filter .1s ease; }
-	.chart-bar-pos { background: #7ee787; border-radius: 0 4px 4px 0; }
-	.chart-bar-neg { background: #ff7b72; border-radius: 4px 0 0 4px; }
+	.chart-bar-pos { background: var(--score-pos); border-radius: 0 4px 4px 0; }
+	.chart-bar-neg { background: var(--score-neg); border-radius: 4px 0 0 4px; }
 	.chart-bar:hover, .chart-bar:focus-visible { filter: brightness(1.3); outline: none; }
 	.chart-score { flex: 0 0 62px; text-align: right; font-variant-numeric: tabular-nums; }
 
-	.chart-tooltip { position: fixed; pointer-events: none; background: #1f2430; border: 1px solid #2a2f3a; color: #e6e6e6; padding: 0.35rem 0.6rem; border-radius: 6px; font-size: 0.78rem; opacity: 0; transform: translateY(4px); transition: opacity .12s ease; z-index: 50; max-width: 240px; }
+	.chart-tooltip { position: fixed; pointer-events: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-primary); padding: 0.35rem 0.6rem; border-radius: 6px; font-size: 0.78rem; opacity: 0; transform: translateY(4px); transition: opacity .12s ease; z-index: 50; max-width: 240px; }
 	.chart-tooltip.visible { opacity: 1; }
 	.chart-tooltip .tt-name { font-weight: 600; display: block; }
-	.chart-tooltip .tt-score { color: #9fb3c8; }
+	.chart-tooltip .tt-score { color: var(--text-secondary); }
 
 	/* Icono "?" de ayuda junto al nombre del modelo */
-	.info-badge { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 0.4rem; border-radius: 50%; border: 1px solid #2a2f3a; background: #1f2430; color: #9fb3c8; font-size: 0.68rem; font-weight: 700; line-height: 1; cursor: help; vertical-align: middle; user-select: none; }
-	.info-badge:hover, .info-badge:focus-visible, .info-badge.open { background: #2a3142; color: #e6e6e6; outline: none; }
-	.info-popover { position: absolute; left: 0; top: 140%; z-index: 60; width: 280px; max-width: 70vw; background: #1f2430; border: 1px solid #2a2f3a; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.8rem; font-weight: 400; color: #cfd6e0; line-height: 1.4; box-shadow: 0 8px 24px rgba(0,0,0,0.4); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease; pointer-events: none; }
+	.info-badge { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 0.4rem; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-secondary); font-size: 0.68rem; font-weight: 700; line-height: 1; cursor: help; vertical-align: middle; user-select: none; }
+	.info-badge:hover, .info-badge:focus-visible, .info-badge.open { background: var(--surface-3); color: var(--text-primary); outline: none; }
+	.info-popover { position: absolute; left: 0; top: 140%; z-index: 60; width: 280px; max-width: 70vw; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.8rem; font-weight: 400; color: var(--text-popover); line-height: 1.4; box-shadow: var(--popover-shadow); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease; pointer-events: none; }
 	.info-badge:hover .info-popover, .info-badge:focus-visible .info-popover, .info-badge.open .info-popover { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
 </style>
 </head>
 <body>
+
+<button type="button" id="theme-toggle" class="theme-toggle" aria-label="Cambiar entre modo claro y oscuro">
+	<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+		<circle cx="12" cy="12" r="4"></circle>
+		<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+	</svg>
+	<svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+		<path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.4 5.4 0 0 1-7.54-7.54A9 9 0 0 0 12 3z"></path>
+	</svg>
+	<span id="theme-toggle-label">Modo claro</span>
+</button>
 
 {{$momentum121Info := "Ordena las acciones por su retorno de los ultimos 12 meses, sin contar el ultimo mes (para evitar el efecto de reversion de corto plazo). Es el modelo de referencia clasico: sirve para medir si los modelos mas complejos realmente aportan algo por encima de esta base simple."}}
 {{$max52wInfo := "Ordena por el precio actual dividido por el maximo del ultimo anio. Sirve como filtro secundario para descartar acciones que se alejaron mucho de su maximo reciente y cuya tendencia alcista podria estar rota."}}
@@ -67,6 +133,7 @@
 {{$accelMomentumInfo := "Compara el retorno de los ultimos pocos meses contra el retorno que se esperaria si la tendencia de los ultimos 12 meses se hubiera mantenido constante. Un valor positivo indica que el momentum se esta acelerando; uno negativo, que se esta desacelerando aunque el retorno total siga siendo positivo."}}
 {{$absoluteMomentumInfo := "Compara el retorno de la accion contra la tasa libre de riesgo en la misma ventana, en vez de contra las demas acciones del universo: mide si a la accion le fue mejor que 'no hacer nada'. Es el enfoque de 'momentum de series de tiempo' (time-series momentum), en vez del momentum relativo de los modelos anteriores."}}
 {{$frogInThePanInfo := "Mide que tan pareja (continua) fue la suba o baja de precio, no solo cuanto subio o bajo. Una tendencia pareja, con muchos dias chicos en la misma direccion, tiende a durar mas que una tendencia a saltos (pocos dias grandes); el nombre viene de la idea de un cambio gradual que pasa desapercibido."}}
+{{$earningsMomentumInfo := "Ordena por la sorpresa de ganancias (earnings): el promedio de cuanto superaron (o no) las ganancias reportadas la estimacion de los analistas en los ultimos trimestres, dividido por su variabilidad. Las acciones que vienen sorprendiendo al alza tienden a seguir haciendolo por un tiempo."}}
 {{$sectorMomentumInfo := "No mide el momentum propio de la accion: le asigna el momentum 12-1 del ETF sectorial de Vanguard de su rubro. Dos acciones del mismo sector comparten el mismo score, porque este modelo elige sectores, no acciones dentro de un sector."}}
 {{$liquidityAdjustedInfo := "Pondera el momentum 12-1 de cada accion por que tan facil es comprarla o venderla sin mover el precio (medido con el ratio de iliquidez de Amihud). A igual momentum, favorece a la accion mas liquida del universo."}}
 
@@ -97,7 +164,7 @@
 {{template "resultsTable" tableTab "etf-m2" .ETFResults.max_52w}}
 
 <h2>Acciones Mega-Cap de EEUU</h2>
-<p class="note">Modelos aplicados: 1 a 11 (el modelo 8 esta pendiente, ver nota mas abajo). El mini-grafico muestra el top 5; la tabla completa esta paginada debajo.</p>
+<p class="note">Modelos aplicados: 1 a 11. El mini-grafico muestra el top 5; la tabla completa esta paginada debajo.</p>
 
 <h3>Modelo 1: Momentum 12-1 clasico <span class="author">(Jegadeesh y Titman, 1993)</span>{{template "modelInfo" $momentum121Info}}</h3>
 {{template "miniChart" chartTab "mc-m1-chart" .MegacapResults.momentum_12_1 $.TickerNames}}
@@ -130,10 +197,9 @@
 {{template "miniChart" chartTab "mc-m7-chart" .MegacapResults.absolute_momentum $.TickerNames}}
 {{template "resultsTable" tableTab "mc-m7" .MegacapResults.absolute_momentum}}
 
-<h3>Modelo 8: Momentum de Fundamentos / Earnings Momentum <span class="author">(Chan, Jegadeesh y Lakonishok, 1996)</span></h3>
-<div class="card failures">
-	<p><strong>Pendiente de implementar.</strong> Requiere datos de earnings/estimados de analistas (sorpresas y revisiones) que Yahoo Finance no entrega de forma gratuita sin autenticacion (el endpoint correspondiente devuelve "Invalid Crumb"). Ver <code>Modelos_de_Momentum.md</code> para el detalle.</p>
-</div>
+<h3>Modelo 8: Momentum de Fundamentos / Earnings Momentum <span class="author">(Chan, Jegadeesh y Lakonishok, 1996)</span>{{template "modelInfo" $earningsMomentumInfo}}</h3>
+{{template "miniChart" chartTab "mc-m8-chart" .MegacapResults.earnings_momentum $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m8" .MegacapResults.earnings_momentum}}
 
 <h3>Modelo 9: Momentum Consecutivo / Frog-in-the-Pan <span class="author">(Da, Peng y Engelberg; Da, Gurun y Warachka, 2014)</span>{{template "modelInfo" $frogInThePanInfo}}</h3>
 {{template "miniChart" chartTab "mc-m9-chart" .MegacapResults.frog_in_the_pan $.TickerNames}}
@@ -184,7 +250,7 @@ function paginateTable(containerId, pageSize) {
 	render();
 }
 
-['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4', 'mc-m6', 'mc-m7', 'mc-m9', 'mc-m10', 'mc-m11'].forEach(function (id) {
+['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4', 'mc-m6', 'mc-m7', 'mc-m8', 'mc-m9', 'mc-m10', 'mc-m11'].forEach(function (id) {
 	paginateTable(id, 10);
 });
 
@@ -245,6 +311,34 @@ function paginateTable(containerId, pageSize) {
 	document.addEventListener('click', closeAll);
 	document.addEventListener('keydown', function (e) {
 		if (e.key === 'Escape') closeAll();
+	});
+})();
+
+(function () {
+	var root = document.documentElement;
+	var toggle = document.getElementById('theme-toggle');
+	var label = document.getElementById('theme-toggle-label');
+	if (!toggle || !label) return;
+
+	function isLight() {
+		return root.getAttribute('data-theme') === 'light';
+	}
+	function syncLabel() {
+		// El boton muestra el modo al que cambiarias si hacés click.
+		label.textContent = isLight() ? 'Modo oscuro' : 'Modo claro';
+	}
+
+	syncLabel();
+
+	toggle.addEventListener('click', function () {
+		var next = isLight() ? 'dark' : 'light';
+		if (next === 'light') {
+			root.setAttribute('data-theme', 'light');
+		} else {
+			root.removeAttribute('data-theme');
+		}
+		syncLabel();
+		try { localStorage.setItem('theme', next); } catch (e) {}
 	});
 })();
 </script>

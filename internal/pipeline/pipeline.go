@@ -12,6 +12,7 @@ import (
 	"modelofinanzas/internal/models/absolutemomentum"
 	"modelofinanzas/internal/models/accelmomentum"
 	"modelofinanzas/internal/models/common"
+	"modelofinanzas/internal/models/earningsmomentum"
 	"modelofinanzas/internal/models/frogpan"
 	"modelofinanzas/internal/models/liquidityadjusted"
 	"modelofinanzas/internal/models/max52w"
@@ -35,6 +36,7 @@ const (
 	ModelVolScaling        = "vol_scaling"
 	ModelAccelMomentum     = "accel_momentum"
 	ModelAbsoluteMomentum  = "absolute_momentum"
+	ModelEarningsMomentum  = "earnings_momentum"
 	ModelFrogInThePan      = "frog_in_the_pan"
 	ModelSectorMomentum    = "sector_momentum"
 	ModelLiquidityAdjusted = "liquidity_adjusted_momentum"
@@ -107,6 +109,9 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 		p.Logger.Printf("=== Descargando precios: %d acciones mega-cap ===", len(megacapTickers))
 		failures = append(failures, p.fetchPrices(megacapTickers, historyStart)...)
 
+		p.Logger.Printf("=== Descargando earnings: %d acciones mega-cap (modelo 8) ===", len(megacapTickers))
+		p.fetchEarnings(megacapTickers)
+
 		p.Logger.Printf("=== Descargando factores de Fama-French ===")
 		if err := p.fetchFactors(); err != nil {
 			p.Logger.Printf("ERROR descargando factores Fama-French: %v", err)
@@ -177,6 +182,8 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 
 	report.MegacapResults[ModelLiquidityAdjusted] = p.computeLiquidityAdjustedMomentum(megacapBars)
 
+	report.MegacapResults[ModelEarningsMomentum] = p.computeEarningsMomentum(megacapTickers)
+
 	// --- Modelo 5: escalado por volatilidad (a nivel de universo mega-cap) ---
 	p.Logger.Printf("=== Calculando modelo 5 (escalado por volatilidad) sobre mega-caps ===")
 	vsResult, err := p.computeVolScaling(megacapBars)
@@ -221,6 +228,30 @@ func (p *Pipeline) fetchPrices(tickers []config.Ticker, start time.Time) []Fetch
 		p.Logger.Printf("OK %s: %d barras (hasta %s)", t.Symbol, len(bars), lastDate)
 	}
 	return failures
+}
+
+// fetchEarnings descarga el historial de earnings de cada ticker (solo se
+// usa para mega-caps, modelo 8). A diferencia de fetchPrices, no devuelve
+// FetchFailure: la cobertura de analistas puede faltar para algunas
+// acciones sin que eso sea un fallo del pipeline (se loguea como AVISO y
+// esa accion simplemente no aparece en el ranking del modelo 8).
+func (p *Pipeline) fetchEarnings(tickers []config.Ticker) {
+	for _, t := range tickers {
+		quarters, err := p.Yahoo.GetEarningsHistory(t.Symbol)
+		if err != nil {
+			p.Logger.Printf("AVISO earnings %s: %v", t.Symbol, err)
+			continue
+		}
+		if len(quarters) == 0 {
+			p.Logger.Printf("AVISO earnings %s: sin trimestres devueltos", t.Symbol)
+			continue
+		}
+		if err := p.DB.UpsertEarnings(t.Symbol, quarters); err != nil {
+			p.Logger.Printf("ERROR guardando earnings %s: %v", t.Symbol, err)
+			continue
+		}
+		p.Logger.Printf("OK earnings %s: %d trimestres", t.Symbol, len(quarters))
+	}
 }
 
 func (p *Pipeline) fetchFactors() error {
@@ -295,6 +326,45 @@ func sortResultsDesc(results []sqlite.ModelResult) {
 		}
 		return results[i].Symbol < results[j].Symbol
 	})
+}
+
+// computeEarningsMomentum implementa el modelo 8: lee el historial de
+// earnings ya descargado (fetchEarnings) y calcula el score de cada accion.
+// Las acciones sin historial de earnings en la base (sin cobertura de
+// analistas, o que fallaron al descargar) quedan fuera del ranking.
+func (p *Pipeline) computeEarningsMomentum(megacapTickers []config.Ticker) []sqlite.ModelResult {
+	var results []sqlite.ModelResult
+	for _, t := range megacapTickers {
+		quarters, err := p.DB.GetEarnings(t.Symbol)
+		if err != nil {
+			p.Logger.Printf("ERROR leyendo earnings de %s: %v", t.Symbol, err)
+			continue
+		}
+		if len(quarters) == 0 {
+			continue
+		}
+
+		score, err := earningsmomentum.Compute(quarters)
+		if err != nil {
+			p.Logger.Printf("AVISO %s/%s: %v", ModelEarningsMomentum, t.Symbol, err)
+			continue
+		}
+
+		results = append(results, sqlite.ModelResult{
+			Universe: UniverseMegacap,
+			Model:    ModelEarningsMomentum,
+			Symbol:   t.Symbol,
+			AsOf:     p.AsOf,
+			Score:    score,
+		})
+	}
+
+	sortResultsDesc(results)
+	for i := range results {
+		results[i].Rank = i + 1
+	}
+
+	return results
 }
 
 // computeSectorMomentum implementa el modelo 10: a cada accion mega-cap le

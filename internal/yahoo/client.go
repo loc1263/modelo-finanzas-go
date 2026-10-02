@@ -9,24 +9,38 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
+	"sync"
 	"time"
 )
 
 const chartURLTemplate = "https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d&events=div,splits"
 
-// Client descarga datos historicos de precios desde Yahoo Finance.
+// browserUserAgent se manda en todos los requests: Yahoo exige un
+// User-Agent de navegador, sin esto algunas respuestas vienen vacias o con error.
+const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+
+// Client descarga datos de Yahoo Finance: precios historicos (endpoint
+// publico, sin autenticacion) y earnings (endpoint que exige una sesion
+// cookie+crumb, ver earnings.go).
 type Client struct {
 	httpClient   *http.Client
 	Pause        time.Duration
 	MaxRetries   int
 	RetryBackoff time.Duration
 	Logger       *log.Logger
+
+	crumbMu sync.Mutex
+	crumb   string
 }
 
-// NewClient crea un cliente con los parametros de rate-limiting dados.
+// NewClient crea un cliente con los parametros de rate-limiting dados. El
+// http.Client lleva un cookie jar porque el endpoint de earnings
+// (quoteSummary) necesita mantener cookies de sesion entre requests.
 func NewClient(timeout, pause, retryBackoff time.Duration, maxRetries int, logger *log.Logger) *Client {
+	jar, _ := cookiejar.New(nil) // nunca falla con opts nil, segun la doc de net/http/cookiejar
 	return &Client{
-		httpClient:   &http.Client{Timeout: timeout},
+		httpClient:   &http.Client{Timeout: timeout, Jar: jar},
 		Pause:        pause,
 		MaxRetries:   maxRetries,
 		RetryBackoff: retryBackoff,
@@ -69,9 +83,7 @@ func (c *Client) doRequest(url string) ([]Bar, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Yahoo exige un User-Agent de navegador; sin esto algunas respuestas
-	// vienen vacias o con error.
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+	req.Header.Set("User-Agent", browserUserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
