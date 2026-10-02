@@ -18,6 +18,24 @@ import (
 	"modelofinanzas/internal/storage/sqlite"
 )
 
+// MonthKey da una clave "YYYY-MM" para alinear una fecha de barra (dia
+// especifico) con una fecha de factor Fama-French (siempre dia 1 del mes).
+func MonthKey(t time.Time) string {
+	return fmt.Sprintf("%04d-%02d", t.Year(), t.Month())
+}
+
+// BarsBetween devuelve las barras de bars cuya fecha esta en [start, end],
+// ambos inclusive. bars debe venir ordenado ascendentemente por fecha.
+func BarsBetween(bars []sqlite.PriceBar, start, end time.Time) []sqlite.PriceBar {
+	out := make([]sqlite.PriceBar, 0, len(bars))
+	for _, b := range bars {
+		if (b.Date.After(start) || b.Date.Equal(start)) && (b.Date.Before(end) || b.Date.Equal(end)) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // MonthClose es el precio de cierre ajustado del ultimo dia habil de un mes.
 type MonthClose struct {
 	Date     time.Time

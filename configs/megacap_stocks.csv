@@ -2,66 +2,68 @@
 # Esta lista es una referencia estatica: las capitalizaciones cambian con el tiempo,
 # por lo que conviene revisarla y actualizarla periodicamente.
 # El ticker debe estar en formato Yahoo Finance (ej. Berkshire Hathaway clase B = BRK-B).
-ticker,name
-AAPL,Apple Inc.
-MSFT,Microsoft Corporation
-GOOGL,Alphabet Inc. Class A
-GOOG,Alphabet Inc. Class C
-AMZN,Amazon.com Inc.
-NVDA,NVIDIA Corporation
-META,Meta Platforms Inc.
-TSLA,Tesla Inc.
-BRK-B,Berkshire Hathaway Inc. Class B
-AVGO,Broadcom Inc.
-LLY,Eli Lilly and Company
-JPM,JPMorgan Chase & Co.
-V,Visa Inc.
-WMT,Walmart Inc.
-UNH,UnitedHealth Group Inc.
-XOM,Exxon Mobil Corporation
-MA,Mastercard Inc.
-ORCL,Oracle Corporation
-COST,Costco Wholesale Corporation
-PG,Procter & Gamble Co.
-HD,Home Depot Inc.
-JNJ,Johnson & Johnson
-NFLX,Netflix Inc.
-BAC,Bank of America Corp.
-CRM,Salesforce Inc.
-ABBV,AbbVie Inc.
-CVX,Chevron Corporation
-KO,Coca-Cola Co.
-MRK,Merck & Co.
-PEP,PepsiCo Inc.
-AMD,Advanced Micro Devices Inc.
-TMO,Thermo Fisher Scientific Inc.
-ADBE,Adobe Inc.
-WFC,Wells Fargo & Co.
-MCD,McDonald's Corp.
-CSCO,Cisco Systems Inc.
-ACN,Accenture plc
-ABT,Abbott Laboratories
-DIS,Walt Disney Co.
-IBM,International Business Machines Corp.
-GE,General Electric Co.
-PM,Philip Morris International Inc.
-CAT,Caterpillar Inc.
-TXN,Texas Instruments Inc.
-VZ,Verizon Communications Inc.
-INTU,Intuit Inc.
-NOW,ServiceNow Inc.
-AMGN,Amgen Inc.
-ISRG,Intuitive Surgical Inc.
-QCOM,Qualcomm Inc.
-SPGI,S&P Global Inc.
-AXP,American Express Co.
-BKNG,Booking Holdings Inc.
-HON,Honeywell International Inc.
-UNP,Union Pacific Corp.
-LOW,Lowe's Companies Inc.
-PFE,Pfizer Inc.
-T,AT&T Inc.
-SYK,Stryker Corp.
-BLK,BlackRock Inc.
-PLTR,Palantir Technologies Inc.
-LIN,Linde plc
+# sector_etf: ETF sectorial de Vanguard (de configs/vanguard_etfs.csv) usado como
+# proxy del sector de la accion para el modelo 10 (momentum sectorial).
+ticker,name,sector_etf
+AAPL,Apple Inc.,VGT
+MSFT,Microsoft Corporation,VGT
+GOOGL,Alphabet Inc. Class A,VOX
+GOOG,Alphabet Inc. Class C,VOX
+AMZN,Amazon.com Inc.,VCR
+NVDA,NVIDIA Corporation,VGT
+META,Meta Platforms Inc.,VOX
+TSLA,Tesla Inc.,VCR
+BRK-B,Berkshire Hathaway Inc. Class B,VFH
+AVGO,Broadcom Inc.,VGT
+LLY,Eli Lilly and Company,VHT
+JPM,JPMorgan Chase & Co.,VFH
+V,Visa Inc.,VFH
+WMT,Walmart Inc.,VDC
+UNH,UnitedHealth Group Inc.,VHT
+XOM,Exxon Mobil Corporation,VDE
+MA,Mastercard Inc.,VFH
+ORCL,Oracle Corporation,VGT
+COST,Costco Wholesale Corporation,VDC
+PG,Procter & Gamble Co.,VDC
+HD,Home Depot Inc.,VCR
+JNJ,Johnson & Johnson,VHT
+NFLX,Netflix Inc.,VOX
+BAC,Bank of America Corp.,VFH
+CRM,Salesforce Inc.,VGT
+ABBV,AbbVie Inc.,VHT
+CVX,Chevron Corporation,VDE
+KO,Coca-Cola Co.,VDC
+MRK,Merck & Co.,VHT
+PEP,PepsiCo Inc.,VDC
+AMD,Advanced Micro Devices Inc.,VGT
+TMO,Thermo Fisher Scientific Inc.,VHT
+ADBE,Adobe Inc.,VGT
+WFC,Wells Fargo & Co.,VFH
+MCD,McDonald's Corp.,VCR
+CSCO,Cisco Systems Inc.,VGT
+ACN,Accenture plc,VGT
+ABT,Abbott Laboratories,VHT
+DIS,Walt Disney Co.,VOX
+IBM,International Business Machines Corp.,VGT
+GE,General Electric Co.,VIS
+PM,Philip Morris International Inc.,VDC
+CAT,Caterpillar Inc.,VIS
+TXN,Texas Instruments Inc.,VGT
+VZ,Verizon Communications Inc.,VOX
+INTU,Intuit Inc.,VGT
+NOW,ServiceNow Inc.,VGT
+AMGN,Amgen Inc.,VHT
+ISRG,Intuitive Surgical Inc.,VHT
+QCOM,Qualcomm Inc.,VGT
+SPGI,S&P Global Inc.,VFH
+AXP,American Express Co.,VFH
+BKNG,Booking Holdings Inc.,VCR
+HON,Honeywell International Inc.,VIS
+UNP,Union Pacific Corp.,VIS
+LOW,Lowe's Companies Inc.,VCR
+PFE,Pfizer Inc.,VHT
+T,AT&T Inc.,VOX
+SYK,Stryker Corp.,VHT
+BLK,BlackRock Inc.,VFH
+PLTR,Palantir Technologies Inc.,VGT
+LIN,Linde plc,VAW

@@ -64,6 +64,11 @@
 {{$volAdjustedInfo := "Divide el retorno de 12-1 y de 6-1 meses por la volatilidad de cada accion, y promedia ambos resultados. Es simple, lo usa un indice real (MSCI), y evita que el ranking quede dominado por las acciones mas volatiles."}}
 {{$residualMomentumInfo := "Regresiona el retorno de cada accion contra los factores de mercado, tamanio y valor de Fama-French, y rankea por la parte del retorno que esos factores NO explican (el residuo). Tiene menos colapsos y menos concentracion en un solo tema que el momentum clasico."}}
 {{$volScalingInfo := "No elige acciones: ajusta cuanto invertir en la estrategia de momentum segun que tan volatil estuvo la cartera recientemente. Si la volatilidad sube, reduce la exposicion. Es una capa de proteccion contra colapsos, combinable con cualquiera de los otros modelos."}}
+{{$accelMomentumInfo := "Compara el retorno de los ultimos pocos meses contra el retorno que se esperaria si la tendencia de los ultimos 12 meses se hubiera mantenido constante. Un valor positivo indica que el momentum se esta acelerando; uno negativo, que se esta desacelerando aunque el retorno total siga siendo positivo."}}
+{{$absoluteMomentumInfo := "Compara el retorno de la accion contra la tasa libre de riesgo en la misma ventana, en vez de contra las demas acciones del universo: mide si a la accion le fue mejor que 'no hacer nada'. Es el enfoque de 'momentum de series de tiempo' (time-series momentum), en vez del momentum relativo de los modelos anteriores."}}
+{{$frogInThePanInfo := "Mide que tan pareja (continua) fue la suba o baja de precio, no solo cuanto subio o bajo. Una tendencia pareja, con muchos dias chicos en la misma direccion, tiende a durar mas que una tendencia a saltos (pocos dias grandes); el nombre viene de la idea de un cambio gradual que pasa desapercibido."}}
+{{$sectorMomentumInfo := "No mide el momentum propio de la accion: le asigna el momentum 12-1 del ETF sectorial de Vanguard de su rubro. Dos acciones del mismo sector comparten el mismo score, porque este modelo elige sectores, no acciones dentro de un sector."}}
+{{$liquidityAdjustedInfo := "Pondera el momentum 12-1 de cada accion por que tan facil es comprarla o venderla sin mover el precio (medido con el ratio de iliquidez de Amihud). A igual momentum, favorece a la accion mas liquida del universo."}}
 
 <h1>Reporte de Momentum: ETFs de Vanguard y Acciones Mega-Cap</h1>
 <div class="meta">
@@ -92,7 +97,7 @@
 {{template "resultsTable" tableTab "etf-m2" .ETFResults.max_52w}}
 
 <h2>Acciones Mega-Cap de EEUU</h2>
-<p class="note">Modelos aplicados: 1 a 5. El mini-grafico muestra el top 5; la tabla completa esta paginada debajo.</p>
+<p class="note">Modelos aplicados: 1 a 11 (el modelo 8 esta pendiente, ver nota mas abajo). El mini-grafico muestra el top 5; la tabla completa esta paginada debajo.</p>
 
 <h3>Modelo 1: Momentum 12-1 clasico <span class="author">(Jegadeesh y Titman, 1993)</span>{{template "modelInfo" $momentum121Info}}</h3>
 {{template "miniChart" chartTab "mc-m1-chart" .MegacapResults.momentum_12_1 $.TickerNames}}
@@ -116,6 +121,31 @@
 	<p>Exposicion recomendada a la estrategia de momentum: <strong>{{printf "%.1f%%" (mulf .VolScaling.ScalingFactor 100)}}</strong> del capital destinado a la estrategia.</p>
 	<p class="note">Este modelo no selecciona acciones: ajusta cuanto invertir en la estrategia segun la volatilidad reciente de la cartera. El factor esta limitado a un maximo de 100% (no se aplica apalancamiento).</p>
 </div>
+
+<h3>Modelo 6: Momentum Acelerado / Doble Velocidad <span class="author">(ap Gwilym, Clare, O'Sullivan y Walmsley, 2010)</span>{{template "modelInfo" $accelMomentumInfo}}</h3>
+{{template "miniChart" chartTab "mc-m6-chart" .MegacapResults.accel_momentum $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m6" .MegacapResults.accel_momentum}}
+
+<h3>Modelo 7: Momentum Absoluto / Time-Series Momentum <span class="author">(Moskowitz, Ooi y Pedersen, 2012)</span>{{template "modelInfo" $absoluteMomentumInfo}}</h3>
+{{template "miniChart" chartTab "mc-m7-chart" .MegacapResults.absolute_momentum $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m7" .MegacapResults.absolute_momentum}}
+
+<h3>Modelo 8: Momentum de Fundamentos / Earnings Momentum <span class="author">(Chan, Jegadeesh y Lakonishok, 1996)</span></h3>
+<div class="card failures">
+	<p><strong>Pendiente de implementar.</strong> Requiere datos de earnings/estimados de analistas (sorpresas y revisiones) que Yahoo Finance no entrega de forma gratuita sin autenticacion (el endpoint correspondiente devuelve "Invalid Crumb"). Ver <code>Modelos_de_Momentum.md</code> para el detalle.</p>
+</div>
+
+<h3>Modelo 9: Momentum Consecutivo / Frog-in-the-Pan <span class="author">(Da, Peng y Engelberg; Da, Gurun y Warachka, 2014)</span>{{template "modelInfo" $frogInThePanInfo}}</h3>
+{{template "miniChart" chartTab "mc-m9-chart" .MegacapResults.frog_in_the_pan $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m9" .MegacapResults.frog_in_the_pan}}
+
+<h3>Modelo 10: Momentum Secundario / Sectorial <span class="author">(Moskowitz y Grinblatt, 1999)</span>{{template "modelInfo" $sectorMomentumInfo}}</h3>
+{{template "miniChart" chartTab "mc-m10-chart" .MegacapResults.sector_momentum $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m10" .MegacapResults.sector_momentum}}
+
+<h3>Modelo 11: Momentum con Liquidez <span class="author">(Amihud, 2002)</span>{{template "modelInfo" $liquidityAdjustedInfo}}</h3>
+{{template "miniChart" chartTab "mc-m11-chart" .MegacapResults.liquidity_adjusted_momentum $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m11" .MegacapResults.liquidity_adjusted_momentum}}
 
 <div id="chart-tooltip" class="chart-tooltip" role="tooltip"></div>
 
@@ -154,7 +184,7 @@ function paginateTable(containerId, pageSize) {
 	render();
 }
 
-['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4'].forEach(function (id) {
+['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4', 'mc-m6', 'mc-m7', 'mc-m9', 'mc-m10', 'mc-m11'].forEach(function (id) {
 	paginateTable(id, 10);
 });
 

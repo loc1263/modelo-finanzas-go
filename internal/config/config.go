@@ -50,6 +50,9 @@ type Config struct {
 		ResidualMomentumMonths         int     `yaml:"residual_momentum_months"`
 		VolScalingTargetVolAnnual      float64 `yaml:"vol_scaling_target_vol_annual"`
 		VolScalingLookbackDays         int     `yaml:"vol_scaling_lookback_days"`
+		// Modelo 6 (momentum acelerado): meses del tramo "corto" a comparar
+		// contra el tramo largo (LookbackMonthsLong).
+		AccelShortMonths int `yaml:"accel_short_months"`
 	} `yaml:"models"`
 }
 

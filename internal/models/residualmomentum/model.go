@@ -41,14 +41,14 @@ func Compute(bars []sqlite.PriceBar, factorRows []sqlite.FactorRow, asOf time.Ti
 
 	factorByMonth := make(map[string]sqlite.FactorRow, len(factorRows))
 	for _, fr := range factorRows {
-		factorByMonth[monthKey(fr.Date)] = fr
+		factorByMonth[common.MonthKey(fr.Date)] = fr
 	}
 
 	var y []float64
 	var x [][]float64
 	var alignedDates []time.Time
 	for i, d := range stockDates {
-		fr, ok := factorByMonth[monthKey(d)]
+		fr, ok := factorByMonth[common.MonthKey(d)]
 		if !ok {
 			continue
 		}
@@ -88,8 +88,4 @@ func Compute(bars []sqlite.PriceBar, factorRows []sqlite.FactorRow, asOf time.Ti
 	}
 
 	return common.Sum(recentResiduals) / sd, nil
-}
-
-func monthKey(t time.Time) string {
-	return fmt.Sprintf("%04d-%02d", t.Year(), t.Month())
 }

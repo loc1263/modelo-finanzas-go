@@ -11,10 +11,15 @@ import (
 type Ticker struct {
 	Symbol string
 	Name   string
+	// SectorETF es el ticker del ETF sectorial de Vanguard que representa a
+	// esta accion (usado por el modelo 10, momentum sectorial). Viene de una
+	// tercera columna opcional "sector_etf"; queda vacio para los CSV que no
+	// la tienen (ej. el de ETFs).
+	SectorETF string
 }
 
-// LoadTickers lee un CSV con columnas "ticker,name", ignorando lineas vacias
-// y comentarios que empiezan con '#'.
+// LoadTickers lee un CSV con columnas "ticker,name" y opcionalmente
+// "sector_etf", ignorando lineas vacias y comentarios que empiezan con '#'.
 func LoadTickers(path string) ([]Ticker, error) {
 	records, err := readCSVSkippingComments(path)
 	if err != nil {
@@ -38,7 +43,11 @@ func LoadTickers(path string) ([]Ticker, error) {
 		if len(rec) > 1 {
 			name = strings.TrimSpace(rec[1])
 		}
-		tickers = append(tickers, Ticker{Symbol: symbol, Name: name})
+		sectorETF := ""
+		if len(rec) > 2 {
+			sectorETF = strings.TrimSpace(rec[2])
+		}
+		tickers = append(tickers, Ticker{Symbol: symbol, Name: name, SectorETF: sectorETF})
 	}
 
 	return tickers, nil
@@ -53,7 +62,7 @@ func readCSVSkippingComments(path string) ([][]string, error) {
 	}
 
 	var cleaned strings.Builder
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}

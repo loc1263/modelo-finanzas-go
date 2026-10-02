@@ -43,3 +43,5 @@ models:
   # Modelo 5 (escalado por volatilidad): objetivo anual y ventana de vol realizada.
   vol_scaling_target_vol_annual: 0.12
   vol_scaling_lookback_days: 126
+  # Modelo 6 (momentum acelerado): meses del tramo corto vs lookback_months_long.
+  accel_short_months: 3

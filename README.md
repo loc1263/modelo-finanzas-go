@@ -1,15 +1,17 @@
 # Modelo Finanzas Go
 
 Pipeline 100% Go que descarga datos de la API gratuita de Yahoo Finance y de
-la Kenneth R. French Data Library, y aplica 5 modelos de momentum sobre:
+la Kenneth R. French Data Library, y aplica modelos de momentum sobre:
 
 - **ETFs de Vanguard** (modelos 1 y 2)
-- **Acciones mega-cap de EEUU** (modelos 1 a 5)
+- **Acciones mega-cap de EEUU** (modelos 1 a 11 — el modelo 8 esta pendiente)
 
 El resultado es un reporte HTML con el ranking de cada modelo.
 
-Ver [`Descripcion_Proyecto.md`](Descripcion_Proyecto.md) para el detalle
-conceptual de cada modelo y de los factores de Fama-French.
+Ver [`Descripcion_Proyecto.md`](Descripcion_Proyecto.md) para el alcance
+general del proyecto, y [`Modelos_de_Momentum.md`](Modelos_de_Momentum.md)
+para el detalle conceptual de cada modelo (que mide, formula, y como esta
+implementado) y de los factores de Fama-French.
 
 ## Requisitos
 
@@ -24,7 +26,7 @@ cmd/pipeline/           Comando principal (main.go)
 internal/yahoo/         Cliente HTTP para la API publica de Yahoo Finance
 internal/famafrench/    Descarga y parseo de los datasets de Kenneth French
 internal/storage/sqlite Persistencia (precios, factores, resultados)
-internal/models/        Los 5 modelos de momentum + helpers matematicos (common/)
+internal/models/        Los modelos de momentum (uno por paquete) + helpers matematicos (common/)
 internal/pipeline/      Orquestador: descarga -> calculo -> persistencia
 internal/report/html/   Generacion del reporte HTML
 internal/logging/       Logger a archivo + consola
@@ -48,7 +50,9 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
    entre requests para no bloquear la API gratuita de Yahoo.
 2. Descarga los factores mensuales de Fama-French (3 factores, 5 factores y
    momentum) desde la Kenneth French Data Library.
-3. Calcula los modelos 1 y 2 para los ETFs, y 1 a 5 para las mega-caps.
+3. Calcula los modelos 1 y 2 para los ETFs, y 1 a 11 para las mega-caps (el
+   modelo 8, earnings momentum, queda pendiente — ver
+   [`Modelos_de_Momentum.md`](Modelos_de_Momentum.md)).
 4. Guarda todo en `data/modelo_finanzas.db` (SQLite).
 5. Genera `output/reporte_<timestamp>.html` y actualiza
    `output/reporte_ultimo.html` (siempre apunta a la corrida mas reciente).
@@ -129,37 +133,30 @@ ignoradas por git. **Nunca** apuntes una corrida de prueba a
   `ticker,name`). Vanguard no publica una API con el listado completo, asi
   que esta lista se mantiene a mano.
 - `configs/megacap_stocks.csv`: lista editable de acciones mega-cap de EEUU
-  (capitalizacion > ~200B USD). Las capitalizaciones cambian con el tiempo;
-  conviene revisar esta lista periodicamente. Los tickers deben estar en
-  formato Yahoo Finance (ej. Berkshire Hathaway clase B = `BRK-B`).
+  (capitalizacion > ~200B USD), con columnas `ticker,name,sector_etf`. Las
+  capitalizaciones cambian con el tiempo; conviene revisar esta lista
+  periodicamente. Los tickers deben estar en formato Yahoo Finance (ej.
+  Berkshire Hathaway clase B = `BRK-B`). La columna `sector_etf` es el
+  ticker del ETF sectorial de Vanguard (de `vanguard_etfs.csv`) que
+  representa el rubro de esa accion, usado por el modelo 10 (momentum
+  sectorial) — si se agrega una accion nueva, hay que asignarle un
+  `sector_etf` para que ese modelo la incluya.
 - Lineas que empiezan con `#` se ignoran (comentarios).
 
 ## Supuestos y simplificaciones de los modelos
 
-Documentados tambien como comentarios en el codigo de cada paquete en
-`internal/models/`:
+El detalle de cada modelo (que mide, formula exacta, y que simplificacion
+se tomo respecto al paper original) esta en
+[`Modelos_de_Momentum.md`](Modelos_de_Momentum.md) y en los comentarios de
+cada paquete en `internal/models/`. Dos convenciones transversales:
 
 - **Convencion "12-1" global**: todos los modelos anclan sus calculos al
   ultimo mes calendario **completo** anterior a la fecha de la corrida (nunca
-  miran el mes en curso, que esta incompleto). Esto es lo que implementa el
-  "sin contar el ultimo mes" de forma consistente en los 5 modelos.
-- **Modelo 3 (ajustado por volatilidad, estilo MSCI)**: la volatilidad se
-  calcula como la desviacion estandar anualizada de retornos diarios en una
-  ventana configurable (`voladjusted_vol_lookback_days`), en vez de 3 anios de
-  retornos semanales como el indice MSCI real. Es una aproximacion razonable
-  y ajustable via config.
-- **Modelo 4 (momentum residual)**: usa el modelo de 3 factores de
-  Fama-French (Mkt-RF, SMB, HML), tal como esta descrito en
-  `Descripcion_Proyecto.md`. La regresion usa una ventana de 36 meses
-  (`residual_regression_window_months`) y el score final es la suma de los
-  ultimos 12 residuos (`residual_momentum_months`) dividida por su desviacion
-  estandar.
-- **Modelo 5 (escalado por volatilidad)**: no rankea acciones — calcula la
-  volatilidad realizada de una cartera equal-weight con todas las mega-caps
-  del universo y devuelve que fraccion del capital destinado a la estrategia
-  conviene exponer. El factor esta **topeado en 100%** (no se usa
-  apalancamiento), a diferencia del paper original de Barroso-Santa Clara
-  que permite apalancar cuando la volatilidad cae por debajo del objetivo.
+  miran el mes en curso, que esta incompleto).
+- **Modelo 8 (earnings momentum) pendiente**: necesita datos de earnings y
+  estimados de analistas que Yahoo no entrega gratis sin autenticacion (se
+  verifico empiricamente). Ver `Modelos_de_Momentum.md` para el detalle y
+  que haria falta para implementarlo.
 
 ## Datos y fuentes
 

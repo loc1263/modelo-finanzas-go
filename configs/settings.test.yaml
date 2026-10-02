@@ -37,3 +37,4 @@ models:
   residual_momentum_months: 12
   vol_scaling_target_vol_annual: 0.12
   vol_scaling_lookback_days: 126
+  accel_short_months: 3

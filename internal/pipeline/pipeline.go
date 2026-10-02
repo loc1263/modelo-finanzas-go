@@ -9,10 +9,15 @@ import (
 
 	"modelofinanzas/internal/config"
 	"modelofinanzas/internal/famafrench"
+	"modelofinanzas/internal/models/absolutemomentum"
+	"modelofinanzas/internal/models/accelmomentum"
 	"modelofinanzas/internal/models/common"
+	"modelofinanzas/internal/models/frogpan"
+	"modelofinanzas/internal/models/liquidityadjusted"
 	"modelofinanzas/internal/models/max52w"
 	"modelofinanzas/internal/models/momentum12_1"
 	"modelofinanzas/internal/models/residualmomentum"
+	"modelofinanzas/internal/models/sectormomentum"
 	"modelofinanzas/internal/models/voladjusted"
 	"modelofinanzas/internal/models/volscaling"
 	"modelofinanzas/internal/storage/sqlite"
@@ -23,11 +28,16 @@ const (
 	UniverseVanguardETF = "vanguard_etf"
 	UniverseMegacap     = "megacap"
 
-	ModelMomentum12_1     = "momentum_12_1"
-	ModelMax52w           = "max_52w"
-	ModelVolAdjusted      = "vol_adjusted"
-	ModelResidualMomentum = "residual_momentum"
-	ModelVolScaling       = "vol_scaling"
+	ModelMomentum12_1      = "momentum_12_1"
+	ModelMax52w            = "max_52w"
+	ModelVolAdjusted       = "vol_adjusted"
+	ModelResidualMomentum  = "residual_momentum"
+	ModelVolScaling        = "vol_scaling"
+	ModelAccelMomentum     = "accel_momentum"
+	ModelAbsoluteMomentum  = "absolute_momentum"
+	ModelFrogInThePan      = "frog_in_the_pan"
+	ModelSectorMomentum    = "sector_momentum"
+	ModelLiquidityAdjusted = "liquidity_adjusted_momentum"
 
 	factorsDataset = "F-F_Research_Data_Factors"
 )
@@ -125,8 +135,8 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 		return max52w.Compute(bars, p.Cfg.Models.Max52wLookbackDays)
 	})
 
-	// --- Mega-caps: modelos 1 a 5 ---
-	p.Logger.Printf("=== Calculando modelos 1-5 para mega-caps ===")
+	// --- Mega-caps: modelos 1 a 11 (el 8, earnings momentum, queda pendiente: ver Modelos_de_Momentum.md) ---
+	p.Logger.Printf("=== Calculando modelos para mega-caps ===")
 	megacapBars := p.loadAllPrices(megacapTickers, historyStart)
 
 	report.MegacapResults[ModelMomentum12_1] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelMomentum12_1, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
@@ -139,15 +149,33 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 		return voladjusted.Compute(bars, p.AsOf, p.Cfg.Models.LookbackMonthsLong, p.Cfg.Models.LookbackMonthsShort, p.Cfg.Models.VolAdjustedVolLookbackDays)
 	})
 
+	// factorRows se usa tanto para el momentum residual (modelo 4) como para
+	// el momentum absoluto (modelo 7): ambos necesitan el factor RF/3-factores
+	// de Fama-French, asi que se descarga una sola vez.
 	factorStart := p.AsOf.AddDate(-(p.Cfg.Models.ResidualRegressionWindowMonths/12 + 2), 0, 0)
 	factorRows, err := p.DB.GetFactors(factorsDataset, factorStart, p.AsOf)
 	if err != nil {
-		p.Logger.Printf("ERROR leyendo factores para momentum residual: %v", err)
+		p.Logger.Printf("ERROR leyendo factores de Fama-French: %v", err)
 	} else {
 		report.MegacapResults[ModelResidualMomentum] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelResidualMomentum, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
 			return residualmomentum.Compute(bars, factorRows, p.AsOf, p.Cfg.Models.ResidualRegressionWindowMonths, p.Cfg.Models.ResidualMomentumMonths)
 		})
+		report.MegacapResults[ModelAbsoluteMomentum] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelAbsoluteMomentum, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
+			return absolutemomentum.Compute(bars, factorRows, p.AsOf, p.Cfg.Models.LookbackMonthsLong)
+		})
 	}
+
+	report.MegacapResults[ModelAccelMomentum] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelAccelMomentum, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
+		return accelmomentum.Compute(bars, p.AsOf, p.Cfg.Models.AccelShortMonths, p.Cfg.Models.LookbackMonthsLong)
+	})
+
+	report.MegacapResults[ModelFrogInThePan] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelFrogInThePan, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
+		return frogpan.Compute(bars, p.AsOf, p.Cfg.Models.LookbackMonthsLong)
+	})
+
+	report.MegacapResults[ModelSectorMomentum] = p.computeSectorMomentum(megacapTickers, etfBars)
+
+	report.MegacapResults[ModelLiquidityAdjusted] = p.computeLiquidityAdjustedMomentum(megacapBars)
 
 	// --- Modelo 5: escalado por volatilidad (a nivel de universo mega-cap) ---
 	p.Logger.Printf("=== Calculando modelo 5 (escalado por volatilidad) sobre mega-caps ===")
@@ -247,7 +275,127 @@ func (p *Pipeline) rankBySymbol(barsBySymbol map[string][]sqlite.PriceBar, unive
 		})
 	}
 
-	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	sortResultsDesc(results)
+	for i := range results {
+		results[i].Rank = i + 1
+	}
+
+	return results
+}
+
+// sortResultsDesc ordena por score descendente (mayor score = mejor rank),
+// con el simbolo como desempate alfabetico para que el orden sea
+// deterministico entre corridas cuando dos scores quedan exactamente
+// iguales (ej. modelo sectorial, donde todas las acciones de un mismo
+// sector comparten score).
+func sortResultsDesc(results []sqlite.ModelResult) {
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score != results[j].Score {
+			return results[i].Score > results[j].Score
+		}
+		return results[i].Symbol < results[j].Symbol
+	})
+}
+
+// computeSectorMomentum implementa el modelo 10: a cada accion mega-cap le
+// asigna el momentum 12-1 del ETF sectorial de Vanguard que la representa
+// (columna sector_etf de configs/megacap_stocks.csv). etfBars son las
+// barras ya cargadas del universo de ETFs (se reusan, no se vuelven a pedir).
+func (p *Pipeline) computeSectorMomentum(megacapTickers []config.Ticker, etfBars map[string][]sqlite.PriceBar) []sqlite.ModelResult {
+	sectorMomentumCache := map[string]float64{}
+
+	var results []sqlite.ModelResult
+	for _, t := range megacapTickers {
+		if t.SectorETF == "" {
+			p.Logger.Printf("AVISO %s/%s: sin sector_etf asignado en megacap_stocks.csv", ModelSectorMomentum, t.Symbol)
+			continue
+		}
+
+		score, ok := sectorMomentumCache[t.SectorETF]
+		if !ok {
+			bars, hasBars := etfBars[t.SectorETF]
+			if !hasBars {
+				p.Logger.Printf("AVISO %s/%s: sin precios del ETF sectorial %s", ModelSectorMomentum, t.Symbol, t.SectorETF)
+				continue
+			}
+			sectorScore, err := sectormomentum.Compute(bars, p.AsOf, p.Cfg.Models.LookbackMonthsLong)
+			if err != nil {
+				p.Logger.Printf("AVISO %s/%s: %v", ModelSectorMomentum, t.SectorETF, err)
+				continue
+			}
+			sectorMomentumCache[t.SectorETF] = sectorScore
+			score = sectorScore
+		}
+
+		results = append(results, sqlite.ModelResult{
+			Universe: UniverseMegacap,
+			Model:    ModelSectorMomentum,
+			Symbol:   t.Symbol,
+			AsOf:     p.AsOf,
+			Score:    score,
+		})
+	}
+
+	sortResultsDesc(results)
+	for i := range results {
+		results[i].Rank = i + 1
+	}
+
+	return results
+}
+
+// computeLiquidityAdjustedMomentum implementa el modelo 11: calcula el
+// momentum 12-1 y la iliquidez de Amihud de cada accion, y pondera el
+// momentum por un score de liquidez relativo al resto del universo (1 =
+// la mas liquida). Es un calculo cruzado (necesita el universo completo
+// antes de poder puntuar a cualquier accion), por eso no usa rankBySymbol.
+func (p *Pipeline) computeLiquidityAdjustedMomentum(barsBySymbol map[string][]sqlite.PriceBar) []sqlite.ModelResult {
+	type row struct {
+		Symbol      string
+		Momentum    float64
+		Illiquidity float64
+	}
+
+	var rows []row
+	for symbol, bars := range barsBySymbol {
+		mom, err := momentum12_1.Compute(bars, p.AsOf, p.Cfg.Models.LookbackMonthsLong)
+		if err != nil {
+			p.Logger.Printf("AVISO %s/%s: %v", ModelLiquidityAdjusted, symbol, err)
+			continue
+		}
+
+		window := common.LastNBars(common.ExcludeCurrentMonth(bars, p.AsOf), p.Cfg.Models.Max52wLookbackDays)
+		illiq, err := liquidityadjusted.Illiquidity(window)
+		if err != nil {
+			p.Logger.Printf("AVISO %s/%s: %v", ModelLiquidityAdjusted, symbol, err)
+			continue
+		}
+
+		rows = append(rows, row{Symbol: symbol, Momentum: mom, Illiquidity: illiq})
+	}
+
+	// Menor iliquidez primero (mas liquida), para asignar el score de liquidez.
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Illiquidity != rows[j].Illiquidity {
+			return rows[i].Illiquidity < rows[j].Illiquidity
+		}
+		return rows[i].Symbol < rows[j].Symbol
+	})
+
+	n := len(rows)
+	results := make([]sqlite.ModelResult, 0, n)
+	for i, r := range rows {
+		liquidityScore := float64(n-i) / float64(n)
+		results = append(results, sqlite.ModelResult{
+			Universe: UniverseMegacap,
+			Model:    ModelLiquidityAdjusted,
+			Symbol:   r.Symbol,
+			AsOf:     p.AsOf,
+			Score:    liquidityadjusted.CombineWithMomentum(r.Momentum, liquidityScore),
+		})
+	}
+
+	sortResultsDesc(results)
 	for i := range results {
 		results[i].Rank = i + 1
 	}
