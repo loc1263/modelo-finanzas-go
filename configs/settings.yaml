@@ -1,0 +1,45 @@
+# Configuracion general del pipeline
+
+database:
+  path: "data/modelo_finanzas.db"
+
+output:
+  html_dir: "output"
+
+logging:
+  dir: "logs"
+  file: "pipeline.log"
+
+universe:
+  vanguard_etfs_csv: "configs/vanguard_etfs.csv"
+  megacap_stocks_csv: "configs/megacap_stocks.csv"
+
+yahoo:
+  # Pausa entre requests a la API gratuita de Yahoo para no bloquearla.
+  request_pause_ms: 1500
+  max_retries: 3
+  retry_backoff_ms: 5000
+  timeout_seconds: 20
+  # Anios de historia diaria a descargar (se necesitan ~36 meses para el
+  # momentum residual, mas margen para el calculo de 52 semanas y vol).
+  history_years: 6
+
+famafrench:
+  # Datasets de la Kenneth R. French Data Library (formato mensual).
+  research_factors_3: "F-F_Research_Data_Factors"
+  research_factors_5: "F-F_Research_Data_5_Factors_2x3"
+  momentum_factor: "F-F_Momentum_Factor"
+
+models:
+  lookback_months_long: 12
+  lookback_months_short: 6
+  # Modelo 2 (maximo 52 semanas): ventana en dias de trading (~252 = 1 anio).
+  max52w_lookback_days: 252
+  # Modelo 3 (momentum ajustado por volatilidad): ventana para la vol anualizada.
+  voladjusted_vol_lookback_days: 252
+  # Modelo 4 (momentum residual): ventana de regresion OLS y meses de residuos.
+  residual_regression_window_months: 36
+  residual_momentum_months: 12
+  # Modelo 5 (escalado por volatilidad): objetivo anual y ventana de vol realizada.
+  vol_scaling_target_vol_annual: 0.12
+  vol_scaling_lookback_days: 126

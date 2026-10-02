@@ -1,0 +1,39 @@
+# Config de pruebas para desarrollo: usa una base y carpetas separadas de
+# las de produccion (data/modelo_finanzas.db, output/, logs/) para no
+# ensuciarlas con corridas de prueba.
+
+database:
+  path: "data/test/test.db"
+
+output:
+  html_dir: "output/test"
+
+logging:
+  dir: "logs/test"
+  file: "pipeline_test.log"
+
+universe:
+  vanguard_etfs_csv: "configs/vanguard_etfs.csv"
+  megacap_stocks_csv: "configs/megacap_stocks.csv"
+
+yahoo:
+  request_pause_ms: 800
+  max_retries: 3
+  retry_backoff_ms: 5000
+  timeout_seconds: 20
+  history_years: 6
+
+famafrench:
+  research_factors_3: "F-F_Research_Data_Factors"
+  research_factors_5: "F-F_Research_Data_5_Factors_2x3"
+  momentum_factor: "F-F_Momentum_Factor"
+
+models:
+  lookback_months_long: 12
+  lookback_months_short: 6
+  max52w_lookback_days: 252
+  voladjusted_vol_lookback_days: 252
+  residual_regression_window_months: 36
+  residual_momentum_months: 12
+  vol_scaling_target_vol_annual: 0.12
+  vol_scaling_lookback_days: 126

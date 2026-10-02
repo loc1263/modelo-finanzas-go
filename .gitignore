@@ -1,0 +1,7 @@
+/data/*.db
+/data/*.db-journal
+/data/test/
+/output/*.html
+/output/test/
+/*.log
+/logs/

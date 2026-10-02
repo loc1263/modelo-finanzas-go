@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reporte de Momentum — ETFs Vanguard y Mega-Caps</title>
+<style>
+	body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; padding: 2rem; background: #0b0e14; color: #e6e6e6; }
+	h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+	h2 { margin-top: 2.5rem; border-bottom: 1px solid #2a2f3a; padding-bottom: 0.4rem; }
+	h3 { color: #9fb3c8; margin-top: 2rem; }
+	.author { color: #6c7a8c; font-weight: 400; font-size: 0.85em; }
+	.meta { color: #9fb3c8; font-size: 0.9rem; margin-bottom: 1.5rem; }
+	table { border-collapse: collapse; width: 100%; margin: 1rem 0 0.5rem; font-size: 0.9rem; }
+	th, td { text-align: left; padding: 0.4rem 0.7rem; border-bottom: 1px solid #1f2430; }
+	th { color: #9fb3c8; font-weight: 600; background: #131722; }
+	tr:nth-child(odd) td { background: #0f1420; }
+	tr.top td { font-weight: 600; }
+	.score-pos { color: #7ee787; }
+	.score-neg { color: #ff7b72; }
+	.card { background: #131722; border: 1px solid #2a2f3a; border-radius: 8px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+	.failures { color: #ffab70; font-size: 0.85rem; }
+	code { background: #1f2430; padding: 0.1rem 0.3rem; border-radius: 4px; }
+	a.ticker-link { color: #e6e6e6; text-decoration: none; }
+	a.ticker-link:hover code { background: #2a3142; }
+	a.ticker-link:hover { text-decoration: underline; }
+	.note { color: #9fb3c8; font-size: 0.85rem; }
+	.pagination { display: flex; align-items: center; gap: 0.8rem; margin: 0 0 2rem; font-size: 0.85rem; color: #9fb3c8; }
+	.pagination button { background: #131722; color: #e6e6e6; border: 1px solid #2a2f3a; border-radius: 6px; padding: 0.3rem 0.8rem; cursor: pointer; font-size: 0.85rem; }
+	.pagination button:hover:not(:disabled) { background: #1f2430; }
+	.pagination button:disabled { opacity: 0.4; cursor: default; }
+
+	/* Mini-grafico de top 5 por modelo */
+	.mini-chart { display: flex; flex-direction: column; gap: 7px; margin: 0.9rem 0 1.6rem; }
+	.chart-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; }
+	.chart-ticker-link { flex: 0 0 58px; color: #e6e6e6; text-decoration: none; font-weight: 600; }
+	.chart-ticker-link:hover, .chart-ticker-link:focus-visible { color: #9fb3c8; text-decoration: underline; }
+	.chart-track { flex: 1; display: flex; align-items: center; height: 18px; }
+	.chart-half { flex: 1; display: flex; height: 100%; }
+	.chart-half-neg { justify-content: flex-end; }
+	.chart-half-pos { justify-content: flex-start; }
+	.chart-baseline { width: 1px; flex: 0 0 1px; align-self: stretch; background: #3a4150; }
+	.chart-bar { display: block; height: 16px; min-width: 3px; text-decoration: none; transition: filter .1s ease; }
+	.chart-bar-pos { background: #7ee787; border-radius: 0 4px 4px 0; }
+	.chart-bar-neg { background: #ff7b72; border-radius: 4px 0 0 4px; }
+	.chart-bar:hover, .chart-bar:focus-visible { filter: brightness(1.3); outline: none; }
+	.chart-score { flex: 0 0 62px; text-align: right; font-variant-numeric: tabular-nums; }
+
+	.chart-tooltip { position: fixed; pointer-events: none; background: #1f2430; border: 1px solid #2a2f3a; color: #e6e6e6; padding: 0.35rem 0.6rem; border-radius: 6px; font-size: 0.78rem; opacity: 0; transform: translateY(4px); transition: opacity .12s ease; z-index: 50; max-width: 240px; }
+	.chart-tooltip.visible { opacity: 1; }
+	.chart-tooltip .tt-name { font-weight: 600; display: block; }
+	.chart-tooltip .tt-score { color: #9fb3c8; }
+
+	/* Icono "?" de ayuda junto al nombre del modelo */
+	.info-badge { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 0.4rem; border-radius: 50%; border: 1px solid #2a2f3a; background: #1f2430; color: #9fb3c8; font-size: 0.68rem; font-weight: 700; line-height: 1; cursor: help; vertical-align: middle; user-select: none; }
+	.info-badge:hover, .info-badge:focus-visible, .info-badge.open { background: #2a3142; color: #e6e6e6; outline: none; }
+	.info-popover { position: absolute; left: 0; top: 140%; z-index: 60; width: 280px; max-width: 70vw; background: #1f2430; border: 1px solid #2a2f3a; border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.8rem; font-weight: 400; color: #cfd6e0; line-height: 1.4; box-shadow: 0 8px 24px rgba(0,0,0,0.4); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease; pointer-events: none; }
+	.info-badge:hover .info-popover, .info-badge:focus-visible .info-popover, .info-badge.open .info-popover { opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
+</style>
+</head>
+<body>
+
+{{$momentum121Info := "Ordena las acciones por su retorno de los ultimos 12 meses, sin contar el ultimo mes (para evitar el efecto de reversion de corto plazo). Es el modelo de referencia clasico: sirve para medir si los modelos mas complejos realmente aportan algo por encima de esta base simple."}}
+{{$max52wInfo := "Ordena por el precio actual dividido por el maximo del ultimo anio. Sirve como filtro secundario para descartar acciones que se alejaron mucho de su maximo reciente y cuya tendencia alcista podria estar rota."}}
+{{$volAdjustedInfo := "Divide el retorno de 12-1 y de 6-1 meses por la volatilidad de cada accion, y promedia ambos resultados. Es simple, lo usa un indice real (MSCI), y evita que el ranking quede dominado por las acciones mas volatiles."}}
+{{$residualMomentumInfo := "Regresiona el retorno de cada accion contra los factores de mercado, tamanio y valor de Fama-French, y rankea por la parte del retorno que esos factores NO explican (el residuo). Tiene menos colapsos y menos concentracion en un solo tema que el momentum clasico."}}
+{{$volScalingInfo := "No elige acciones: ajusta cuanto invertir en la estrategia de momentum segun que tan volatil estuvo la cartera recientemente. Si la volatilidad sube, reduce la exposicion. Es una capa de proteccion contra colapsos, combinable con cualquiera de los otros modelos."}}
+
+<h1>Reporte de Momentum: ETFs de Vanguard y Acciones Mega-Cap</h1>
+<div class="meta">
+	Generado: {{.GeneratedAt.Format "2006-01-02 15:04 MST"}} &middot;
+	Fecha de referencia (as of): {{.AsOf.Format "2006-01-02"}}
+</div>
+
+{{if .FailedFetches}}
+<div class="card failures">
+	<strong>{{len .FailedFetches}} ticker(s) con error de descarga:</strong>
+	<ul>
+	{{range .FailedFetches}}<li><code>{{.Symbol}}</code>: {{.Error}}</li>{{end}}
+	</ul>
+</div>
+{{end}}
+
+<h2>ETFs de Vanguard</h2>
+<p class="note">Modelos aplicados: 1 (Momentum 12-1) y 2 (Maximo 52 semanas). El mini-grafico muestra el top 5; la tabla completa esta paginada debajo.</p>
+
+<h3>Modelo 1: Momentum 12-1 clasico <span class="author">(Jegadeesh y Titman, 1993)</span>{{template "modelInfo" $momentum121Info}}</h3>
+{{template "miniChart" chartTab "etf-m1-chart" .ETFResults.momentum_12_1 $.TickerNames}}
+{{template "resultsTable" tableTab "etf-m1" .ETFResults.momentum_12_1}}
+
+<h3>Modelo 2: Maximo de 52 semanas <span class="author">(George y Hwang, 2004)</span>{{template "modelInfo" $max52wInfo}}</h3>
+{{template "miniChart" chartTab "etf-m2-chart" .ETFResults.max_52w $.TickerNames}}
+{{template "resultsTable" tableTab "etf-m2" .ETFResults.max_52w}}
+
+<h2>Acciones Mega-Cap de EEUU</h2>
+<p class="note">Modelos aplicados: 1 a 5. El mini-grafico muestra el top 5; la tabla completa esta paginada debajo.</p>
+
+<h3>Modelo 1: Momentum 12-1 clasico <span class="author">(Jegadeesh y Titman, 1993)</span>{{template "modelInfo" $momentum121Info}}</h3>
+{{template "miniChart" chartTab "mc-m1-chart" .MegacapResults.momentum_12_1 $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m1" .MegacapResults.momentum_12_1}}
+
+<h3>Modelo 2: Maximo de 52 semanas <span class="author">(George y Hwang, 2004)</span>{{template "modelInfo" $max52wInfo}}</h3>
+{{template "miniChart" chartTab "mc-m2-chart" .MegacapResults.max_52w $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m2" .MegacapResults.max_52w}}
+
+<h3>Modelo 3: Momentum ajustado por volatilidad <span class="author">(metodo MSCI)</span>{{template "modelInfo" $volAdjustedInfo}}</h3>
+{{template "miniChart" chartTab "mc-m3-chart" .MegacapResults.vol_adjusted $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m3" .MegacapResults.vol_adjusted}}
+
+<h3>Modelo 4: Momentum residual <span class="author">(Blitz, Huij y Martens, 2011)</span>{{template "modelInfo" $residualMomentumInfo}}</h3>
+{{template "miniChart" chartTab "mc-m4-chart" .MegacapResults.residual_momentum $.TickerNames}}
+{{template "resultsTable" tableTab "mc-m4" .MegacapResults.residual_momentum}}
+
+<h3>Modelo 5: Escalado por volatilidad <span class="author">(Barroso y Santa-Clara, 2015)</span>{{template "modelInfo" $volScalingInfo}}</h3>
+<div class="card">
+	<p>Volatilidad realizada anualizada de la cartera equal-weight de mega-caps: <strong>{{printf "%.2f%%" (mulf .VolScaling.RealizedVolAnnual 100)}}</strong></p>
+	<p>Exposicion recomendada a la estrategia de momentum: <strong>{{printf "%.1f%%" (mulf .VolScaling.ScalingFactor 100)}}</strong> del capital destinado a la estrategia.</p>
+	<p class="note">Este modelo no selecciona acciones: ajusta cuanto invertir en la estrategia segun la volatilidad reciente de la cartera. El factor esta limitado a un maximo de 100% (no se aplica apalancamiento).</p>
+</div>
+
+<div id="chart-tooltip" class="chart-tooltip" role="tooltip"></div>
+
+<script>
+function paginateTable(containerId, pageSize) {
+	var container = document.getElementById(containerId);
+	if (!container) return;
+	var rows = Array.prototype.slice.call(container.querySelectorAll('tbody tr'));
+	if (rows.length === 0) return;
+
+	var totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+	var page = 1;
+
+	var label = container.querySelector('.page-label');
+	var prevBtn = container.querySelector('.page-prev');
+	var nextBtn = container.querySelector('.page-next');
+	var controls = container.querySelector('.pagination');
+
+	function render() {
+		rows.forEach(function (row, i) {
+			var rowPage = Math.floor(i / pageSize) + 1;
+			row.style.display = (rowPage === page) ? '' : 'none';
+		});
+		label.textContent = 'Pagina ' + page + ' de ' + totalPages + ' (' + rows.length + ' tickers)';
+		prevBtn.disabled = page <= 1;
+		nextBtn.disabled = page >= totalPages;
+	}
+
+	if (totalPages <= 1) {
+		controls.style.display = 'none';
+	} else {
+		prevBtn.addEventListener('click', function () { if (page > 1) { page--; render(); } });
+		nextBtn.addEventListener('click', function () { if (page < totalPages) { page++; render(); } });
+	}
+
+	render();
+}
+
+['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4'].forEach(function (id) {
+	paginateTable(id, 10);
+});
+
+(function () {
+	var tooltip = document.getElementById('chart-tooltip');
+	if (!tooltip) return;
+
+	var nameEl = document.createElement('span');
+	nameEl.className = 'tt-name';
+	var scoreEl = document.createElement('span');
+	scoreEl.className = 'tt-score';
+	tooltip.appendChild(nameEl);
+	tooltip.appendChild(scoreEl);
+
+	function moveTooltip(e) {
+		tooltip.style.left = (e.clientX + 14) + 'px';
+		tooltip.style.top = (e.clientY + 14) + 'px';
+	}
+	function showTooltip(e) {
+		var el = e.currentTarget;
+		// Los nombres vienen de nuestros propios CSV de tickers, pero se
+		// insertan via textContent (nunca innerHTML) por las dudas.
+		nameEl.textContent = el.dataset.company || el.textContent;
+		scoreEl.textContent = el.dataset.score ? ('Score: ' + el.dataset.score) : '';
+		tooltip.classList.add('visible');
+		moveTooltip(e);
+	}
+	function hideTooltip() {
+		tooltip.classList.remove('visible');
+	}
+
+	document.querySelectorAll('.chart-bar, .chart-ticker-link').forEach(function (el) {
+		el.addEventListener('mouseenter', showTooltip);
+		el.addEventListener('mousemove', moveTooltip);
+		el.addEventListener('mouseleave', hideTooltip);
+		el.addEventListener('focus', showTooltip);
+		el.addEventListener('blur', hideTooltip);
+	});
+})();
+
+(function () {
+	var badges = Array.prototype.slice.call(document.querySelectorAll('.info-badge'));
+	if (badges.length === 0) return;
+
+	function closeAll() {
+		badges.forEach(function (b) { b.classList.remove('open'); });
+	}
+
+	badges.forEach(function (badge) {
+		badge.addEventListener('click', function (e) {
+			e.stopPropagation();
+			var wasOpen = badge.classList.contains('open');
+			closeAll();
+			if (!wasOpen) badge.classList.add('open');
+		});
+	});
+
+	document.addEventListener('click', closeAll);
+	document.addEventListener('keydown', function (e) {
+		if (e.key === 'Escape') closeAll();
+	});
+})();
+</script>
+
+</body>
+</html>
+
+{{define "modelInfo"}}
+<span class="info-badge" tabindex="0" role="button" aria-label="Que hace este modelo">?<span class="info-popover">{{.}}</span></span>
+{{end}}
+
+{{define "miniChart"}}
+{{if .Bars}}
+<div class="mini-chart">
+{{range .Bars}}
+<div class="chart-row">
+	<a class="chart-ticker-link" href="{{yahooQuoteURL .Symbol}}" target="_blank" rel="noopener noreferrer" data-company="{{.Name}}">{{.Symbol}}</a>
+	<div class="chart-track">
+		<div class="chart-half chart-half-neg">{{if not .Positive}}<a class="chart-bar chart-bar-neg" style="width:{{.WidthPct}}%" href="{{yahooQuoteURL .Symbol}}" target="_blank" rel="noopener noreferrer" data-company="{{.Name}}" data-score="{{printf "%.4f" .Score}}"></a>{{end}}</div>
+		<div class="chart-baseline"></div>
+		<div class="chart-half chart-half-pos">{{if .Positive}}<a class="chart-bar chart-bar-pos" style="width:{{.WidthPct}}%" href="{{yahooQuoteURL .Symbol}}" target="_blank" rel="noopener noreferrer" data-company="{{.Name}}" data-score="{{printf "%.4f" .Score}}"></a>{{end}}</div>
+	</div>
+	<span class="chart-score {{if ge .Score 0.0}}score-pos{{else}}score-neg{{end}}">{{printf "%.4f" .Score}}</span>
+</div>
+{{end}}
+</div>
+{{else}}
+<p class="note">Sin datos suficientes para el mini-grafico.</p>
+{{end}}
+{{end}}
+
+{{define "resultsTable"}}
+{{if not .Results}}
+<p class="note">Sin datos suficientes para este modelo.</p>
+{{else}}
+<div id="{{.ID}}">
+<table>
+<thead><tr><th>Rank</th><th>Ticker</th><th>Score</th></tr></thead>
+<tbody>
+{{range .Results}}
+<tr{{if le .Rank 10}} class="top"{{end}}>
+	<td>{{.Rank}}</td>
+	<td><a class="ticker-link" href="{{yahooQuoteURL .Symbol}}" target="_blank" rel="noopener noreferrer"><code>{{.Symbol}}</code></a></td>
+	<td class="{{if ge .Score 0.0}}score-pos{{else}}score-neg{{end}}">{{printf "%.4f" .Score}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+<div class="pagination">
+	<button type="button" class="page-prev">&laquo; Anterior</button>
+	<span class="page-label"></span>
+	<button type="button" class="page-next">Siguiente &raquo;</button>
+</div>
+</div>
+{{end}}
+{{end}}

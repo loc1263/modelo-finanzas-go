@@ -1,0 +1,68 @@
+ticker,name
+VOO,Vanguard S&P 500 ETF
+VTI,Vanguard Total Stock Market ETF
+VXF,Vanguard Extended Market ETF
+VUG,Vanguard Growth ETF
+VTV,Vanguard Value ETF
+VV,Vanguard Large-Cap ETF
+VB,Vanguard Small-Cap ETF
+VBK,Vanguard Small-Cap Growth ETF
+VBR,Vanguard Small-Cap Value ETF
+VO,Vanguard Mid-Cap ETF
+VOT,Vanguard Mid-Cap Growth ETF
+VOE,Vanguard Mid-Cap Value ETF
+VONE,Vanguard Russell 1000 ETF
+VONG,Vanguard Russell 1000 Growth ETF
+VONV,Vanguard Russell 1000 Value ETF
+VTWO,Vanguard Russell 2000 ETF
+VTWG,Vanguard Russell 2000 Growth ETF
+VTWV,Vanguard Russell 2000 Value ETF
+MGC,Vanguard Mega Cap ETF
+MGK,Vanguard Mega Cap Growth ETF
+MGV,Vanguard Mega Cap Value ETF
+VXUS,Vanguard Total International Stock ETF
+VEA,Vanguard FTSE Developed Markets ETF
+VWO,Vanguard FTSE Emerging Markets ETF
+VGK,Vanguard FTSE Europe ETF
+VPL,Vanguard FTSE Pacific ETF
+VSS,Vanguard FTSE All-World ex-US Small-Cap ETF
+VEU,Vanguard FTSE All-World ex-US ETF
+VIGI,Vanguard International Dividend Appreciation ETF
+VYMI,Vanguard International High Dividend Yield ETF
+VT,Vanguard Total World Stock ETF
+ESGV,Vanguard ESG U.S. Stock ETF
+VSGX,Vanguard ESG International Stock ETF
+BND,Vanguard Total Bond Market ETF
+BNDX,Vanguard Total International Bond ETF
+BNDW,Vanguard Total World Bond ETF
+BSV,Vanguard Short-Term Bond ETF
+BIV,Vanguard Intermediate-Term Bond ETF
+BLV,Vanguard Long-Term Bond ETF
+VGSH,Vanguard Short-Term Treasury ETF
+VGIT,Vanguard Intermediate-Term Treasury ETF
+VGLT,Vanguard Long-Term Treasury ETF
+EDV,Vanguard Extended Duration Treasury ETF
+VTIP,Vanguard Short-Term Inflation-Protected Securities ETF
+VCSH,Vanguard Short-Term Corporate Bond ETF
+VCIT,Vanguard Intermediate-Term Corporate Bond ETF
+VCLT,Vanguard Long-Term Corporate Bond ETF
+VMBS,Vanguard Mortgage-Backed Securities ETF
+VUSB,Vanguard Ultra-Short Bond ETF
+VIG,Vanguard Dividend Appreciation ETF
+VYM,Vanguard High Dividend Yield ETF
+VNQ,Vanguard Real Estate ETF
+VNQI,Vanguard Global ex-U.S. Real Estate ETF
+VGT,Vanguard Information Technology ETF
+VHT,Vanguard Health Care ETF
+VFH,Vanguard Financials ETF
+VDE,Vanguard Energy ETF
+VIS,Vanguard Industrials ETF
+VAW,Vanguard Materials ETF
+VDC,Vanguard Consumer Staples ETF
+VCR,Vanguard Consumer Discretionary ETF
+VPU,Vanguard Utilities ETF
+VOX,Vanguard Communication Services ETF
+VFMO,Vanguard U.S. Momentum Factor ETF
+VFVA,Vanguard U.S. Value Factor ETF
+VFQY,Vanguard U.S. Quality Factor ETF
+VFMV,Vanguard U.S. Minimum Volatility ETF
