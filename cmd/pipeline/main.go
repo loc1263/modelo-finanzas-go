@@ -18,6 +18,15 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run contiene toda la logica del comando y devuelve el codigo de salida del
+// proceso (0 = ok, 1 = error). Centralizar la salida aca, en vez de llamar a
+// log.Fatal/os.Exit desde varios puntos de main, garantiza que los `defer`
+// de cierre de recursos (base de datos, archivo de log) siempre corran antes
+// de que el proceso termine.
+func run() int {
 	configPath := flag.String("config", "configs/settings.yaml", "ruta al archivo de configuracion")
 	skipFetch := flag.Bool("skip-fetch", false, "si esta presente, no descarga datos nuevos; usa lo que ya hay en la base")
 	limit := flag.Int("limit", 0, "si es > 0, limita la cantidad de tickers por universo (util para pruebas)")
@@ -29,25 +38,29 @@ func main() {
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("cargando configuracion: %v", err)
+		log.Printf("cargando configuracion: %v", err)
+		return 1
 	}
 
 	if *historyDate != "" {
 		db, err := sqlite.Open(cfg.Database.Path)
 		if err != nil {
-			log.Fatalf("abriendo base de datos: %v", err)
+			log.Printf("abriendo base de datos: %v", err)
+			return 1
 		}
 		defer db.Close()
 
 		if err := runHistory(db, *historyDate); err != nil {
-			log.Fatalf("%v", err)
+			log.Printf("%v", err)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	logger, logFile, err := logging.New(cfg.Logging.Dir, cfg.Logging.File, now, cfg.Logging.RetentionDays)
 	if err != nil {
-		log.Fatalf("iniciando logger: %v", err)
+		log.Printf("iniciando logger: %v", err)
+		return 1
 	}
 	defer logFile.Close()
 
@@ -55,7 +68,8 @@ func main() {
 
 	db, err := sqlite.Open(cfg.Database.Path)
 	if err != nil {
-		logger.Fatalf("abriendo base de datos: %v", err)
+		logger.Printf("abriendo base de datos: %v", err)
+		return 1
 	}
 	defer db.Close()
 
@@ -84,7 +98,8 @@ func main() {
 
 	report, err := pl.Run(pipeline.Options{SkipFetch: *skipFetch, Limit: *limit, ResetToday: *resetToday})
 	if err != nil {
-		logger.Fatalf("corriendo pipeline: %v", err)
+		logger.Printf("corriendo pipeline: %v", err)
+		return 1
 	}
 
 	// Se guarda un archivo con timestamp (historial de corridas) y ademas se
@@ -92,7 +107,8 @@ func main() {
 	filename := html.ReportFilePrefix + report.GeneratedAt.Format(html.ReportTimestampLayout) + ".html"
 	path, err := html.Render(report, cfg.Output.HTMLDir, filename)
 	if err != nil {
-		logger.Fatalf("generando reporte HTML: %v", err)
+		logger.Printf("generando reporte HTML: %v", err)
+		return 1
 	}
 	if _, err := html.Render(report, cfg.Output.HTMLDir, html.LatestReportFilename); err != nil {
 		logger.Printf("AVISO: no se pudo actualizar %s: %v", html.LatestReportFilename, err)
@@ -105,6 +121,7 @@ func main() {
 	logger.Println("=== Fin del pipeline ===")
 
 	if len(report.FailedFetches) > 0 {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
