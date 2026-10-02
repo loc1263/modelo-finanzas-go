@@ -23,6 +23,10 @@ yahoo:
   # Anios de historia diaria a descargar (se necesitan ~36 meses para el
   # momentum residual, mas margen para el calculo de 52 semanas y vol).
   history_years: 6
+  # Tickers descargados en paralelo (cada worker igual respeta su propia
+  # pausa de arriba). 1 = secuencial. Subir esto acerca el ritmo total de
+  # requests a Yahoo a concurrency/request_pause_ms — mantenerlo chico.
+  concurrency: 2
 
 famafrench:
   # Datasets de la Kenneth R. French Data Library (formato mensual).

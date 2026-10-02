@@ -22,6 +22,7 @@ yahoo:
   retry_backoff_ms: 5000
   timeout_seconds: 20
   history_years: 6
+  concurrency: 2
 
 famafrench:
   research_factors_3: "F-F_Research_Data_Factors"

@@ -5,6 +5,7 @@ package pipeline
 import (
 	"log"
 	"sort"
+	"sync"
 	"time"
 
 	"modelofinanzas/internal/config"
@@ -209,30 +210,81 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 	return report, nil
 }
 
+// parallelForEach corre fn una vez por cada elemento de items, con hasta
+// workers goroutines activas al mismo tiempo (minimo 1; si items tiene
+// menos elementos que workers, se usan solo los necesarios). Bloquea hasta
+// que todas las llamadas terminan.
+//
+// Importante para no arriesgar que Yahoo bloquee el acceso: esto NO reparte
+// ni achica ninguna pausa entre requests — cada goroutine que llama a fn
+// sigue esperando su propia pausa completa (yahoo.Client.Pause) antes de
+// cada request suyo, exactamente igual que en el modo secuencial (workers=1).
+// Lo unico que cambia es que, con workers>1, varias de esas esperas y
+// requests ocurren en simultaneo en vez de una despues de la otra, asi que
+// el ritmo total de requests a Yahoo queda, a lo sumo, en
+// aproximadamente workers/Pause — por eso Cfg.Yahoo.Concurrency se
+// recomienda mantener chico (2-3).
+func parallelForEach[T any](items []T, workers int, fn func(T)) {
+	if workers < 1 {
+		workers = 1
+	}
+	if workers > len(items) {
+		workers = len(items)
+	}
+	if workers <= 1 {
+		for _, item := range items {
+			fn(item)
+		}
+		return
+	}
+
+	jobs := make(chan T)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Go(func() {
+			for item := range jobs {
+				fn(item)
+			}
+		})
+	}
+	for _, item := range items {
+		jobs <- item
+	}
+	close(jobs)
+	wg.Wait()
+}
+
 func (p *Pipeline) fetchPrices(tickers []config.Ticker, start time.Time) []FetchFailure {
+	var mu sync.Mutex
 	var failures []FetchFailure
-	for _, t := range tickers {
+
+	parallelForEach(tickers, p.Cfg.Yahoo.Concurrency, func(t config.Ticker) {
 		bars, err := p.Yahoo.GetDailyHistory(t.Symbol, start, p.AsOf)
 		if err != nil {
 			p.Logger.Printf("FALLO descarga %s: %v", t.Symbol, err)
 			_ = p.DB.SetFetchStatus(t.Symbol, "", "error", err.Error())
+			mu.Lock()
 			failures = append(failures, FetchFailure{Symbol: t.Symbol, Error: err.Error()})
-			continue
+			mu.Unlock()
+			return
 		}
 		if len(bars) == 0 {
 			p.Logger.Printf("AVISO %s: 0 barras devueltas", t.Symbol)
 			_ = p.DB.SetFetchStatus(t.Symbol, "", "empty", "0 barras devueltas")
-			continue
+			return
 		}
 		if err := p.DB.UpsertBars(t.Symbol, bars); err != nil {
 			p.Logger.Printf("ERROR guardando %s: %v", t.Symbol, err)
+			mu.Lock()
 			failures = append(failures, FetchFailure{Symbol: t.Symbol, Error: err.Error()})
-			continue
+			mu.Unlock()
+			return
 		}
 		lastDate := bars[len(bars)-1].Date.Format("2006-01-02")
 		_ = p.DB.SetFetchStatus(t.Symbol, lastDate, "ok", "")
 		p.Logger.Printf("OK %s: %d barras (hasta %s)", t.Symbol, len(bars), lastDate)
-	}
+	})
+
 	return failures
 }
 
@@ -242,22 +294,22 @@ func (p *Pipeline) fetchPrices(tickers []config.Ticker, start time.Time) []Fetch
 // acciones sin que eso sea un fallo del pipeline (se loguea como AVISO y
 // esa accion simplemente no aparece en el ranking del modelo 8).
 func (p *Pipeline) fetchEarnings(tickers []config.Ticker) {
-	for _, t := range tickers {
+	parallelForEach(tickers, p.Cfg.Yahoo.Concurrency, func(t config.Ticker) {
 		quarters, err := p.Yahoo.GetEarningsHistory(t.Symbol)
 		if err != nil {
 			p.Logger.Printf("AVISO earnings %s: %v", t.Symbol, err)
-			continue
+			return
 		}
 		if len(quarters) == 0 {
 			p.Logger.Printf("AVISO earnings %s: sin trimestres devueltos", t.Symbol)
-			continue
+			return
 		}
 		if err := p.DB.UpsertEarnings(t.Symbol, quarters); err != nil {
 			p.Logger.Printf("ERROR guardando earnings %s: %v", t.Symbol, err)
-			continue
+			return
 		}
 		p.Logger.Printf("OK earnings %s: %d trimestres", t.Symbol, len(quarters))
-	}
+	})
 }
 
 func (p *Pipeline) fetchFactors() error {

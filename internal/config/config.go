@@ -33,6 +33,14 @@ type Config struct {
 		RetryBackoffMs int `yaml:"retry_backoff_ms"`
 		TimeoutSeconds int `yaml:"timeout_seconds"`
 		HistoryYears   int `yaml:"history_years"`
+		// Cuantos tickers se descargan en paralelo (precios y earnings).
+		// Cada worker sigue respetando su propia pausa (request_pause_ms)
+		// entre sus propios requests — no se reparte ni se achica la pausa
+		// al subir la concurrencia. 1 = secuencial (comportamiento
+		// original). Subir esto acerca el ritmo total de requests a Yahoo a
+		// concurrency/request_pause_ms; mantenerlo chico (2-3) para no
+		// arriesgar que Yahoo empiece a bloquear o devolver 429.
+		Concurrency int `yaml:"concurrency"`
 	} `yaml:"yahoo"`
 
 	FamaFrench struct {

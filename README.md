@@ -68,7 +68,14 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
 
 Una corrida completa de todo el universo puede tardar bastante por las pausas
 entre requests (ver `yahoo.request_pause_ms` en la config) — es esperado y
-necesario para no ser bloqueado por Yahoo.
+necesario para no ser bloqueado por Yahoo. Para acelerarla sin perder esa
+pausa por request, hay `yahoo.concurrency` (default `2`): descarga varios
+tickers en simultaneo, pero cada uno igual espera su propia pausa completa
+antes de pedir el suyo — no se reparte la pausa entre ellos. Subir
+`concurrency` acerca el ritmo total de requests a Yahoo a
+`concurrency / request_pause_ms`; mantenerlo chico (2-3) para no arriesgar
+que Yahoo empiece a bloquear o devolver errores 429. `concurrency: 1`
+vuelve al comportamiento 100% secuencial.
 
 ### Flags disponibles
 
