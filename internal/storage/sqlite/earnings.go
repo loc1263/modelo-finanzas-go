@@ -45,15 +45,21 @@ func (db *DB) UpsertEarnings(symbol string, quarters []yahoo.EarningsQuarter) er
 	return tx.Commit()
 }
 
-// GetEarnings devuelve el historial de earnings de symbol, ordenado por
-// trimestre ascendente (el mas reciente al final).
-func (db *DB) GetEarnings(symbol string) ([]EarningsQuarter, error) {
+// GetEarnings devuelve los ultimos maxQuarters trimestres de earnings de
+// symbol, ordenados ascendente (el mas reciente al final).
+//
+// Sin este limite, la tabla acumularia cada vez mas trimestres con el paso
+// del tiempo (cada corrida agrega el/los trimestres nuevos que Yahoo
+// reporto, pero nunca borra los viejos) y el score de earningsmomentum.Compute
+// dejaria de significar "ultimos ~4 trimestres" silenciosamente.
+func (db *DB) GetEarnings(symbol string, maxQuarters int) ([]EarningsQuarter, error) {
 	rows, err := db.Query(`
 		SELECT quarter, eps_actual, eps_estimate, surprise_pct
 		FROM earnings
 		WHERE symbol = ?
-		ORDER BY quarter ASC
-	`, symbol)
+		ORDER BY quarter DESC
+		LIMIT ?
+	`, symbol, maxQuarters)
 	if err != nil {
 		return nil, err
 	}
@@ -72,5 +78,15 @@ func (db *DB) GetEarnings(symbol string) ([]EarningsQuarter, error) {
 		}
 		out = append(out, q)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Vino en orden descendente (para que LIMIT se quede con los mas
+	// recientes); se da vuelta para devolver ascendente, como documenta la funcion.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+
+	return out, nil
 }

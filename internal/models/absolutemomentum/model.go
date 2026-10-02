@@ -25,22 +25,27 @@ import (
 	"modelofinanzas/internal/storage/sqlite"
 )
 
-// Compute devuelve el retorno de lookbackMonths meses menos el retorno
-// compuesto de la tasa libre de riesgo (RF) en la misma ventana.
+// Compute devuelve el retorno compuesto de la accion menos el retorno
+// compuesto de la tasa libre de riesgo (RF), ambos sobre los ultimos
+// lookbackMonths meses en que hay dato de la accion Y de RF al mismo tiempo.
 //
-// factorRows debe venir de db.GetFactors("F-F_Research_Data_Factors", ...)
-// cubriendo al menos lookbackMonths meses hasta el mes completo anterior a asOf.
+// Alinear primero y recortar despues (en vez de exigir que los ultimos
+// lookbackMonths meses de la accion tengan RF) importa en la practica: la
+// Kenneth French Data Library suele publicar con 1-2 meses de demora
+// respecto al precio mas reciente de la accion. Con ese desfasaje, exigir
+// que la ventana de RF coincida exactamente con el mes mas reciente de la
+// accion dejaria el modelo sin datos casi siempre. En cambio, igual que el
+// modelo 4 (momentum residual), la ventana de "ultimos lookbackMonths
+// meses" se toma sobre los meses ya alineados: si RF esta dos meses
+// atrasado, la ventana completa se corre dos meses hacia atras, pero sigue
+// siendo una ventana completa y comparable.
+//
+// factorRows debe venir de db.GetFactors("F-F_Research_Data_Factors", ...).
 func Compute(bars []sqlite.PriceBar, factorRows []sqlite.FactorRow, asOf time.Time, lookbackMonths int) (float64, error) {
 	closes := common.MonthEndCloses(bars, asOf)
-
-	rTotal, err := common.TrailingReturn(closes, lookbackMonths)
-	if err != nil {
-		return 0, fmt.Errorf("retorno de %d meses: %w", lookbackMonths, err)
-	}
-
-	n := len(closes)
-	if n < lookbackMonths+1 {
-		return 0, fmt.Errorf("se necesitan al menos %d meses de historia, hay %d", lookbackMonths+1, n)
+	stockReturns := common.MonthlyReturns(closes)
+	if len(stockReturns) == 0 {
+		return 0, fmt.Errorf("sin retornos mensuales de la accion")
 	}
 
 	rfByMonth := make(map[string]float64, len(factorRows))
@@ -50,17 +55,25 @@ func Compute(bars []sqlite.PriceBar, factorRows []sqlite.FactorRow, asOf time.Ti
 		}
 	}
 
-	cumRF := 1.0
-	matched := 0
-	for i := n - lookbackMonths; i < n; i++ {
-		if rf, ok := rfByMonth[common.MonthKey(closes[i].Date)]; ok {
-			cumRF *= 1 + rf
-			matched++
+	var alignedStock, alignedRF []float64
+	for i, r := range stockReturns {
+		// stockReturns[i] es el retorno del mes closes[i+1].Date.
+		if rf, ok := rfByMonth[common.MonthKey(closes[i+1].Date)]; ok {
+			alignedStock = append(alignedStock, r)
+			alignedRF = append(alignedRF, rf)
 		}
 	}
-	if matched == 0 {
-		return 0, fmt.Errorf("sin datos de RF alineados con la ventana de la accion")
+
+	if len(alignedStock) < lookbackMonths {
+		return 0, fmt.Errorf("se necesitan %d meses alineados con RF, hay %d", lookbackMonths, len(alignedStock))
 	}
 
-	return rTotal - (cumRF - 1), nil
+	start := len(alignedStock) - lookbackMonths
+	cumStock, cumRF := 1.0, 1.0
+	for i := start; i < len(alignedStock); i++ {
+		cumStock *= 1 + alignedStock[i]
+		cumRF *= 1 + alignedRF[i]
+	}
+
+	return (cumStock - 1) - (cumRF - 1), nil
 }

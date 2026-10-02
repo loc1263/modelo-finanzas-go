@@ -52,9 +52,21 @@ func Illiquidity(bars []sqlite.PriceBar) (float64, error) {
 	return sum / float64(n), nil
 }
 
-// CombineWithMomentum ajusta un retorno de momentum por un score de liquidez
-// en (0, 1] (1 = la accion mas liquida del universo comparado), penalizando
-// el momentum de las acciones mas dificiles de operar.
-func CombineWithMomentum(momentum, liquidityScore float64) float64 {
-	return momentum * liquidityScore
+// CombineWithMomentum resta al momentum una penalidad proporcional a la
+// iliquidez (1 - liquidityScore, donde liquidityScore esta en (0,1] y 1 es
+// la accion mas liquida del universo comparado), escalada por penaltyScale.
+//
+// Se resta en vez de multiplicar a proposito: multiplicar por un numero en
+// (0,1] acerca cualquier valor a cero, lo que MEJORA (acerca a cero) el
+// score de una accion con momentum negativo a medida que es mas iliquida —
+// exactamente al reves de lo que el modelo quiere decir. Restar una
+// penalidad siempre empeora el score, sin importar el signo del momentum.
+//
+// penaltyScale fija cuanto pesa la iliquidez frente al momentum; se
+// recomienda el desvio estandar del momentum del universo comparado (ver
+// pipeline.computeLiquidityAdjustedMomentum), para que la penalidad sea de
+// una magnitud comparable a la señal en vez de una constante arbitraria.
+func CombineWithMomentum(momentum, liquidityScore, penaltyScale float64) float64 {
+	illiquidityPenalty := (1 - liquidityScore) * penaltyScale
+	return momentum - illiquidityPenalty
 }

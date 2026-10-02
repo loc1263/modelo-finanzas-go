@@ -42,6 +42,12 @@ const (
 	ModelLiquidityAdjusted = "liquidity_adjusted_momentum"
 
 	factorsDataset = "F-F_Research_Data_Factors"
+
+	// Yahoo devuelve tipicamente los ultimos 4 trimestres de earningsHistory;
+	// se usa el mismo numero como tope al leer de la base, para que el score
+	// del modelo 8 siempre signifique "ultimos ~4 trimestres" y no crezca
+	// solo con el paso del tiempo (ver Mejoras_Pendientes.md, MEJ-002).
+	earningsMaxQuarters = 4
 )
 
 // Options controla el alcance de una corrida (util para pruebas rapidas).
@@ -140,7 +146,7 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 		return max52w.Compute(bars, p.Cfg.Models.Max52wLookbackDays)
 	})
 
-	// --- Mega-caps: modelos 1 a 11 (el 8, earnings momentum, queda pendiente: ver Modelos_de_Momentum.md) ---
+	// --- Mega-caps: modelos 1 a 11 ---
 	p.Logger.Printf("=== Calculando modelos para mega-caps ===")
 	megacapBars := p.loadAllPrices(megacapTickers, historyStart)
 
@@ -335,7 +341,7 @@ func sortResultsDesc(results []sqlite.ModelResult) {
 func (p *Pipeline) computeEarningsMomentum(megacapTickers []config.Ticker) []sqlite.ModelResult {
 	var results []sqlite.ModelResult
 	for _, t := range megacapTickers {
-		quarters, err := p.DB.GetEarnings(t.Symbol)
+		quarters, err := p.DB.GetEarnings(t.Symbol, earningsMaxQuarters)
 		if err != nil {
 			p.Logger.Printf("ERROR leyendo earnings de %s: %v", t.Symbol, err)
 			continue
@@ -452,6 +458,15 @@ func (p *Pipeline) computeLiquidityAdjustedMomentum(barsBySymbol map[string][]sq
 		return rows[i].Symbol < rows[j].Symbol
 	})
 
+	// Escala de la penalidad por iliquidez: el desvio estandar del momentum
+	// del propio universo, para que la penalidad sea de una magnitud
+	// comparable a la señal (ver liquidityadjusted.CombineWithMomentum).
+	momentums := make([]float64, len(rows))
+	for i, r := range rows {
+		momentums[i] = r.Momentum
+	}
+	penaltyScale := common.StdDev(momentums)
+
 	n := len(rows)
 	results := make([]sqlite.ModelResult, 0, n)
 	for i, r := range rows {
@@ -461,7 +476,7 @@ func (p *Pipeline) computeLiquidityAdjustedMomentum(barsBySymbol map[string][]sq
 			Model:    ModelLiquidityAdjusted,
 			Symbol:   r.Symbol,
 			AsOf:     p.AsOf,
-			Score:    liquidityadjusted.CombineWithMomentum(r.Momentum, liquidityScore),
+			Score:    liquidityadjusted.CombineWithMomentum(r.Momentum, liquidityScore, penaltyScale),
 		})
 	}
 

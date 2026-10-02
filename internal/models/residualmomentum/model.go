@@ -46,7 +46,6 @@ func Compute(bars []sqlite.PriceBar, factorRows []sqlite.FactorRow, asOf time.Ti
 
 	var y []float64
 	var x [][]float64
-	var alignedDates []time.Time
 	for i, d := range stockDates {
 		fr, ok := factorByMonth[common.MonthKey(d)]
 		if !ok {
@@ -63,7 +62,6 @@ func Compute(bars []sqlite.PriceBar, factorRows []sqlite.FactorRow, asOf time.Ti
 		excessReturn := stockReturns[i] - rf
 		y = append(y, excessReturn)
 		x = append(x, []float64{mktRF, smb, hml})
-		alignedDates = append(alignedDates, d)
 	}
 
 	if len(y) < regressionWindowMonths {
