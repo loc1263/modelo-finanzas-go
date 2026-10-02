@@ -3,8 +3,11 @@
 package pipeline
 
 import (
+	"fmt"
 	"log"
+	"math/rand"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"modelofinanzas/internal/models/earningsmomentum"
 	"modelofinanzas/internal/models/frogpan"
 	"modelofinanzas/internal/models/liquidityadjusted"
+	"modelofinanzas/internal/models/markowitz"
 	"modelofinanzas/internal/models/max52w"
 	"modelofinanzas/internal/models/momentum12_1"
 	"modelofinanzas/internal/models/residualmomentum"
@@ -34,13 +38,18 @@ const (
 	ModelMax52w            = "max_52w"
 	ModelVolAdjusted       = "vol_adjusted"
 	ModelResidualMomentum  = "residual_momentum"
-	ModelVolScaling        = "vol_scaling"
 	ModelAccelMomentum     = "accel_momentum"
 	ModelAbsoluteMomentum  = "absolute_momentum"
 	ModelEarningsMomentum  = "earnings_momentum"
 	ModelFrogInThePan      = "frog_in_the_pan"
 	ModelSectorMomentum    = "sector_momentum"
 	ModelLiquidityAdjusted = "liquidity_adjusted_momentum"
+
+	// Construccion de cartera (simulacion de Markowitz). No son modelos de
+	// momentum — se muestran en una seccion aparte del reporte, no junto a
+	// los modelos 1-11 (ver Modelos_de_Momentum.md).
+	ModelMarkowitzTopMomentum  = "markowitz_top_momentum"
+	ModelMarkowitzFullUniverse = "markowitz_full_universe"
 
 	factorsDataset = "F-F_Research_Data_Factors"
 
@@ -61,8 +70,9 @@ type UniverseModel struct {
 
 // KnownUniverseModels devuelve, en el orden en que se calculan, todos los
 // pares (universo, modelo) que una corrida puede llegar a guardar en
-// model_results. ModelVolScaling (modelo 5) no aparece: es un resultado a
-// nivel de universo, no por simbolo, y no se persiste en esta tabla.
+// model_results. El modelo 5 (escalado por volatilidad, Report.VolScaling)
+// no aparece: es un resultado a nivel de universo, no por simbolo, y no se
+// persiste en esta tabla.
 func KnownUniverseModels() []UniverseModel {
 	return []UniverseModel{
 		{UniverseVanguardETF, ModelMomentum12_1},
@@ -77,6 +87,8 @@ func KnownUniverseModels() []UniverseModel {
 		{UniverseMegacap, ModelSectorMomentum},
 		{UniverseMegacap, ModelLiquidityAdjusted},
 		{UniverseMegacap, ModelEarningsMomentum},
+		{UniverseMegacap, ModelMarkowitzTopMomentum},
+		{UniverseMegacap, ModelMarkowitzFullUniverse},
 	}
 }
 
@@ -106,6 +118,21 @@ type Report struct {
 	VolScaling     volscaling.Result
 	FailedFetches  []FetchFailure
 	TickerNames    map[string]string // symbol -> nombre de la empresa/fondo, para mostrar en el reporte
+
+	// Construccion de cartera (simulacion de Markowitz): separado de
+	// MegacapResults a proposito, no es un modelo de momentum mas (ver
+	// Modelos_de_Momentum.md, seccion "Construccion de cartera"). *Stats
+	// trae el retorno/volatilidad/Sharpe de la cartera optima encontrada
+	// (para el resumen); *Ranked trae los mismos pesos como ranking, para
+	// la tabla paginada y la persistencia en model_results.
+	PortfolioTopMomentum        markowitz.Result
+	PortfolioTopMomentumRanked  []sqlite.ModelResult
+	PortfolioFullUniverse       markowitz.Result
+	PortfolioFullUniverseRanked []sqlite.ModelResult
+	// MarkowitzTopMomentumN es Cfg.Models.MarkowitzTopMomentumN, copiado aca
+	// para que el template pueda mostrarlo en el heading aunque la
+	// simulacion haya fallado (PortfolioTopMomentumRanked quedaria vacio).
+	MarkowitzTopMomentumN int
 }
 
 type FetchFailure struct {
@@ -157,12 +184,13 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 	}
 
 	report := &Report{
-		GeneratedAt:    time.Now().UTC(),
-		AsOf:           p.AsOf,
-		ETFResults:     map[string][]sqlite.ModelResult{},
-		MegacapResults: map[string][]sqlite.ModelResult{},
-		FailedFetches:  failures,
-		TickerNames:    tickerNames(etfTickers, megacapTickers),
+		GeneratedAt:           time.Now().UTC(),
+		AsOf:                  p.AsOf,
+		ETFResults:            map[string][]sqlite.ModelResult{},
+		MegacapResults:        map[string][]sqlite.ModelResult{},
+		FailedFetches:         failures,
+		TickerNames:           tickerNames(etfTickers, megacapTickers),
+		MarkowitzTopMomentumN: p.Cfg.Models.MarkowitzTopMomentumN,
 	}
 
 	// --- ETFs: modelos 1 y 2 ---
@@ -204,6 +232,35 @@ func (p *Pipeline) Run(opts Options) (*Report, error) {
 		report.MegacapResults[ModelAbsoluteMomentum] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelAbsoluteMomentum, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
 			return absolutemomentum.Compute(bars, factorRows, p.AsOf, p.Cfg.Models.LookbackMonthsLong)
 		})
+
+		// --- Construccion de cartera: simulacion de Markowitz ---
+		// Comparte el requisito de datos de Fama-French con los modelos 4 y
+		// 7 (necesita RF para el Sharpe ratio), por eso vive en esta misma
+		// rama. rng se siembra de forma deterministica segun el dia de la
+		// corrida (no la hora), para que reejecutar el pipeline el mismo
+		// dia encuentre siempre la misma cartera optima.
+		p.Logger.Printf("=== Calculando construccion de cartera (simulacion de Markowitz) ===")
+		if riskFreeAnnual, err := trailingAnnualRF(factorRows, p.Cfg.Models.LookbackMonthsLong); err != nil {
+			p.Logger.Printf("ERROR calculando tasa libre de riesgo para Markowitz: %v", err)
+		} else {
+			dayKey, _ := strconv.ParseInt(p.AsOf.Format("20060102"), 10, 64)
+			rng := rand.New(rand.NewSource(dayKey))
+
+			topMomentumBars := topNBySymbol(megacapBars, report.MegacapResults[ModelMomentum12_1], p.Cfg.Models.MarkowitzTopMomentumN)
+			if result, ranked, err := p.computeMarkowitzPortfolio(topMomentumBars, ModelMarkowitzTopMomentum, rng, riskFreeAnnual); err != nil {
+				p.Logger.Printf("ERROR en simulacion de Markowitz (top momentum): %v", err)
+			} else {
+				report.PortfolioTopMomentum = result
+				report.PortfolioTopMomentumRanked = ranked
+			}
+
+			if result, ranked, err := p.computeMarkowitzPortfolio(megacapBars, ModelMarkowitzFullUniverse, rng, riskFreeAnnual); err != nil {
+				p.Logger.Printf("ERROR en simulacion de Markowitz (universo completo): %v", err)
+			} else {
+				report.PortfolioFullUniverse = result
+				report.PortfolioFullUniverseRanked = ranked
+			}
+		}
 	}
 
 	report.MegacapResults[ModelAccelMomentum] = p.rankBySymbol(megacapBars, UniverseMegacap, ModelAccelMomentum, func(symbol string, bars []sqlite.PriceBar) (float64, error) {
@@ -611,6 +668,95 @@ func equalWeightedReturns(barsBySymbol map[string][]sqlite.PriceBar) []float64 {
 	return out
 }
 
+// topNBySymbol filtra barsBySymbol dejando solo los symbols de las primeras
+// n filas de ranked (ya ordenado por rank ascendente, ver sortResultsDesc).
+// Usado para correr la simulacion de Markowitz sobre las acciones de mejor
+// momentum en vez de sobre todo el universo.
+func topNBySymbol(barsBySymbol map[string][]sqlite.PriceBar, ranked []sqlite.ModelResult, n int) map[string][]sqlite.PriceBar {
+	if n > len(ranked) {
+		n = len(ranked)
+	}
+	out := make(map[string][]sqlite.PriceBar, n)
+	for _, r := range ranked[:n] {
+		if bars, ok := barsBySymbol[r.Symbol]; ok {
+			out[r.Symbol] = bars
+		}
+	}
+	return out
+}
+
+// trailingAnnualRF compone la tasa libre de riesgo (factor RF de
+// Fama-French) de los ultimos `months` meses disponibles, para usar como
+// tasa de referencia del Sharpe ratio en la simulacion de Markowitz.
+// factorRows debe venir ordenado por fecha ascendente (ver GetFactors).
+func trailingAnnualRF(factorRows []sqlite.FactorRow, months int) (float64, error) {
+	var rfValues []float64
+	for _, fr := range factorRows {
+		if rf, ok := fr.Values["RF"]; ok {
+			rfValues = append(rfValues, rf)
+		}
+	}
+	if len(rfValues) < months {
+		return 0, fmt.Errorf("se necesitan %d meses de RF, hay %d", months, len(rfValues))
+	}
+
+	compounded := 1.0
+	for _, rf := range rfValues[len(rfValues)-months:] {
+		compounded *= 1 + rf
+	}
+	return compounded - 1, nil
+}
+
+// computeMarkowitzPortfolio alinea los retornos diarios de barsBySymbol (ver
+// markowitz.Simulate) y corre la simulacion, devolviendo los pesos de la
+// cartera optima como un ranking (mayor peso primero) para reusar el mismo
+// formato de tabla que los modelos de momentum.
+func (p *Pipeline) computeMarkowitzPortfolio(barsBySymbol map[string][]sqlite.PriceBar, modelName string, rng *rand.Rand, riskFreeAnnual float64) (markowitz.Result, []sqlite.ModelResult, error) {
+	trimmed := make(map[string][]float64, len(barsBySymbol))
+	minLen := -1
+	for symbol, bars := range barsBySymbol {
+		window := common.LastNBars(common.ExcludeCurrentMonth(bars, p.AsOf), p.Cfg.Models.MarkowitzLookbackDays)
+		rets := common.DailyReturns(window)
+		if len(rets) < 2 {
+			continue
+		}
+		trimmed[symbol] = rets
+		if minLen == -1 || len(rets) < minLen {
+			minLen = len(rets)
+		}
+	}
+	if len(trimmed) < 2 {
+		return markowitz.Result{}, nil, fmt.Errorf("se necesitan al menos 2 simbolos con historia suficiente, hay %d", len(trimmed))
+	}
+
+	aligned := make(map[string][]float64, len(trimmed))
+	for symbol, rets := range trimmed {
+		aligned[symbol] = rets[len(rets)-minLen:]
+	}
+
+	result, err := markowitz.Simulate(aligned, p.Cfg.Models.MarkowitzSimulations, riskFreeAnnual, rng)
+	if err != nil {
+		return markowitz.Result{}, nil, err
+	}
+
+	ranked := make([]sqlite.ModelResult, 0, len(result.Weights))
+	for symbol, weight := range result.Weights {
+		ranked = append(ranked, sqlite.ModelResult{
+			Universe: UniverseMegacap,
+			Model:    modelName,
+			Symbol:   symbol,
+			AsOf:     p.AsOf,
+			Score:    weight,
+		})
+	}
+	sortResultsDesc(ranked)
+	for i := range ranked {
+		ranked[i].Rank = i + 1
+	}
+
+	return result, ranked, nil
+}
+
 func (p *Pipeline) persistResults(runDate time.Time, report *Report) error {
 	var all []sqlite.ModelResult
 	for _, results := range report.ETFResults {
@@ -619,6 +765,8 @@ func (p *Pipeline) persistResults(runDate time.Time, report *Report) error {
 	for _, results := range report.MegacapResults {
 		all = append(all, results...)
 	}
+	all = append(all, report.PortfolioTopMomentumRanked...)
+	all = append(all, report.PortfolioFullUniverseRanked...)
 	if len(all) == 0 {
 		return nil
 	}

@@ -1,14 +1,16 @@
 # Modelos de Momentum
 
-Detalle conceptual de los 11 modelos y de cómo se implementó cada uno en
-este proyecto (paquete Go, fórmula exacta y supuestos). Para el alcance
-general del proyecto ver [`Descripcion_Proyecto.md`](Descripcion_Proyecto.md);
-para cómo correr el pipeline, [`README.md`](README.md).
+Detalle conceptual de los 11 modelos de momentum y de cómo se implementó
+cada uno en este proyecto (paquete Go, fórmula exacta y supuestos), más la
+simulación de Markowitz (construcción de cartera, no es un modelo de
+momentum). Para el alcance general del proyecto ver
+[`Descripcion_Proyecto.md`](Descripcion_Proyecto.md); para cómo correr el
+pipeline, [`README.md`](README.md).
 
 Se aplican los modelos 1 y 2 a los ETFs de Vanguard, y los modelos 1 al 11
-a las acciones mega-cap de EEUU. Todos los modelos siguen la misma
-convención: nunca miran el mes calendario en curso (incompleto), solo el
-último mes completo anterior a la fecha de la corrida — ver
+a las acciones mega-cap de EEUU. Todos los modelos de momentum siguen la
+misma convención: nunca miran el mes calendario en curso (incompleto),
+solo el último mes completo anterior a la fecha de la corrida — ver
 `internal/models/common/returns.go`.
 
 
@@ -204,40 +206,40 @@ Ordena por la sorpresa de ganancias (earnings): las acciones cuyas
 ganancias reportadas vienen sorprendiendo al alza a los analistas tienden a
 seguir haciéndolo por un tiempo (post-earnings-announcement drift).
 
-**De donde salen los datos:** el endpoint de precios que usa el resto del
-proyecto (`v8/finance/chart`) no tiene earnings ni estimados. El que si los
-tiene es `v10/finance/quoteSummary` (modulo `earningsHistory`), pero a
-diferencia de los precios, **exige una sesion autenticada**: primero hay
-que pedir una cookie de sesion a `fc.yahoo.com`, y con esa cookie pedir un
-token "crumb" a `query1.finance.yahoo.com/v1/test/getcrumb`, que despues se
-manda como parametro en cada request a `quoteSummary`. Es el mismo
-mecanismo que usa `yfinance` (Python) por debajo. Se verifico a mano con
+**De dónde salen los datos:** el endpoint de precios que usa el resto del
+proyecto (`v8/finance/chart`) no tiene earnings ni estimados. El que sí los
+tiene es `v10/finance/quoteSummary` (módulo `earningsHistory`), pero a
+diferencia de los precios, **exige una sesión autenticada**: primero hay
+que pedir una cookie de sesión a `fc.yahoo.com`, y con esa cookie pedir un
+token "crumb" a `query1.finance.yahoo.com/v1/test/getcrumb`, que después se
+manda como parámetro en cada request a `quoteSummary`. Es el mismo
+mecanismo que usa `yfinance` (Python) por debajo. Se verificó a mano con
 `curl` antes de implementarlo (el endpoint devuelve
 `{"error":{"code":"Unauthorized","description":"Invalid Crumb"}}` si se lo
-llama directo, sin el paso de la cookie+crumb primero) — esta implementado
+llama directo, sin el paso de la cookie+crumb primero) — está implementado
 en `internal/yahoo/earnings.go`, con el mismo cliente HTTP (y su cookie
 jar) que usa `internal/yahoo/client.go` para los precios.
 
-**Importante — esto es mas fragil que el resto del pipeline:** Yahoo no
-documenta oficialmente este mecanismo, asi que podria cambiarlo sin aviso
+**Importante — esto es más frágil que el resto del pipeline:** Yahoo no
+documenta oficialmente este mecanismo, así que podría cambiarlo sin aviso
 en cualquier momento (es la misma clase de riesgo que hizo que se
-descartara `piquette/finance-go`, ver `CLAUDE.md`). Si en algun momento
+descartara `piquette/finance-go`, ver `CLAUDE.md`). Si en algún momento
 este modelo empieza a fallar para todos los tickers con un error de
-"crumb" o "cookie" invalido, revisar primero con `curl` si Yahoo cambio el
-flujo, antes de asumir que es un bug del codigo.
+"crumb" o "cookie" inválido, revisar primero con `curl` si Yahoo cambió el
+flujo, antes de asumir que es un bug del código.
 
-**Implementacion:** version simplificada de las "Standardized Unexpected
-Earnings" (SUE) academicas. En vez de la sorpresa en dolares de EPS
-dividida por el precio o por la dispersion de estimados, se usa
+**Implementación:** versión simplificada de las "Standardized Unexpected
+Earnings" (SUE) académicas. En vez de la sorpresa en dólares de EPS
+dividida por el precio o por la dispersión de estimados, se usa
 directamente el `surprisePercent` que reporta Yahoo (sorpresa como % del
-EPS estimado) en los ultimos trimestres disponibles (tipicamente 4): el
-score es el promedio de esas sorpresas, dividido por su desviacion
-estandar cuando hay suficiente variacion (mismo patron que el modelo 4,
+EPS estimado) en los últimos trimestres disponibles (típicamente 4): el
+score es el promedio de esas sorpresas, dividido por su desviación
+estándar cuando hay suficiente variación (mismo patrón que el modelo 4,
 momentum residual). Los datos se guardan en la tabla `earnings` de SQLite
-(simbolo + trimestre + EPS real/estimado/sorpresa), igual que los precios y
+(símbolo + trimestre + EPS real/estimado/sorpresa), igual que los precios y
 los factores de Fama-French — a diferencia de los precios, siempre se
 refrescan en cada corrida sin `-skip-fetch` (son pocos requests, no hace
-falta cachear por dia).
+falta cachear por día).
 
 
 
@@ -300,3 +302,63 @@ fundamentales (rentabilidad, crecimiento, pagos de dividendos) que no están
 disponibles vía la API gratuita de Yahoo usada en este proyecto. Por eso
 el modelo implementado usa solo el componente de liquidez de Amihud, no el
 de calidad de AFP.
+
+
+
+## Construcción de cartera: simulación de Markowitz
+
+**Markowitz (1952), "Portfolio Selection", Journal of Finance.** Paquete:
+`internal/models/markowitz`.
+
+A diferencia de los 11 modelos anteriores, esto no es un modelo de
+momentum: no rankea acciones por ninguna señal de tendencia, construye una
+cartera. Por eso se muestra en el reporte como una sección aparte
+("Construcción de cartera"), no numerada junto a los modelos 1-11.
+
+La idea central de Markowitz es que diversificar entre activos con
+retornos poco correlacionados reduce el riesgo de la cartera sin
+sacrificar retorno — el objetivo es encontrar la cartera que maximiza el
+retorno por unidad de riesgo asumido (el Sharpe ratio).
+
+**Implementación:** en vez de resolver el problema de optimización
+cuadrática de forma analítica (invirtiendo la matriz de covarianza), se
+simulan `models.markowitz_simulations` carteras aleatorias long-only (sin
+apalancamiento, pesos en `[0,1]` que suman 1, muestreados uniformemente
+sobre el símplex) sobre los retornos diarios de los últimos
+`models.markowitz_lookback_days` días, y se evalúa cada una:
+
+```
+retorno anual = pesos · retorno medio anualizado de cada activo
+volatilidad anual = sqrt(pesos · matriz de covarianza anualizada · pesos)
+Sharpe = (retorno anual − RF anual) / volatilidad anual
+```
+
+La tasa libre de riesgo (RF) es la misma que usan los modelos 4 y 7
+(factor RF de Fama-French), compuesta sobre los últimos 12 meses
+disponibles. La cartera de mayor Sharpe ratio encontrada es el resultado;
+sus pesos se muestran como un ranking (mayor peso primero) para reusar el
+mismo formato de tabla que los modelos de momentum.
+
+Se corren dos variantes, ambas sobre el universo mega-cap:
+
+- **Top momentum:** sobre las `models.markowitz_top_momentum_n` acciones
+  de mejor ranking según el modelo 1 (momentum 12-1 clásico) — conecta la
+  construcción de cartera con el resto del pipeline en vez de ser una
+  herramienta aislada.
+- **Universo completo:** sobre todas las acciones mega-cap con historia
+  suficiente, sin ningún filtro previo.
+
+**Reproducibilidad:** al ser una simulación aleatoria, el generador de
+números aleatorios se siembra de forma determinística a partir del día de
+la corrida (`AsOf`, no la hora exacta): reejecutar el pipeline el mismo
+día encuentra siempre la misma cartera óptima, en vez de una distinta en
+cada corrida — igual que el resto del pipeline, que garantiza resultados
+estables al reejecutarse el mismo día (ver `CLAUDE.md`, sección
+"Idempotencia").
+
+**Simplificación:** el método clásico de Markowitz resuelve la frontera
+eficiente de forma analítica (optimización cuadrática); acá se aproxima
+por simulación Monte Carlo, el enfoque más común en la práctica para
+explorar la frontera eficiente sin depender de un solver externo. Tampoco
+se permite apalancamiento ni posiciones en corto (long-only), siguiendo la
+misma postura conservadora que el modelo 5 (escalado por volatilidad).

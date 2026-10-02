@@ -138,6 +138,7 @@
 {{$earningsMomentumInfo := "Ordena por la sorpresa de ganancias (earnings): el promedio de cuanto superaron (o no) las ganancias reportadas la estimacion de los analistas en los ultimos trimestres, dividido por su variabilidad. Las acciones que vienen sorprendiendo al alza tienden a seguir haciendolo por un tiempo."}}
 {{$sectorMomentumInfo := "No mide el momentum propio de la accion: le asigna el momentum 12-1 del ETF sectorial de Vanguard de su rubro. Dos acciones del mismo sector comparten el mismo score, porque este modelo elige sectores, no acciones dentro de un sector."}}
 {{$liquidityAdjustedInfo := "Pondera el momentum 12-1 de cada accion por que tan facil es comprarla o venderla sin mover el precio (medido con el ratio de iliquidez de Amihud). A igual momentum, favorece a la accion mas liquida del universo."}}
+{{$markowitzInfo := "No es un modelo de momentum: simula miles de carteras aleatorias long-only (sin apalancamiento) y se queda con la de mayor Sharpe ratio. Es la idea central de Markowitz (1952): diversificar entre activos con retornos poco correlacionados reduce el riesgo de la cartera sin sacrificar retorno."}}
 
 <h1>Reporte de Momentum: ETFs de Vanguard y Acciones Mega-Cap</h1>
 <div class="meta">
@@ -215,6 +216,25 @@
 {{template "miniChart" chartTab "mc-m11-chart" .MegacapResults.liquidity_adjusted_momentum $.TickerNames}}
 {{template "resultsTable" tableTab "mc-m11" .MegacapResults.liquidity_adjusted_momentum}}
 
+<h2>Construccion de cartera <span class="author">(simulacion de Markowitz, 1952)</span>{{template "modelInfo" $markowitzInfo}}</h2>
+<p class="note">Esto no es un modelo de momentum mas: en vez de rankear acciones, construye una cartera. Se simulan miles de carteras aleatorias long-only (sin apalancamiento) y se muestra la de mayor Sharpe ratio encontrada; la tabla rankea los simbolos por su peso en esa cartera.</p>
+
+<h3>Top {{.MarkowitzTopMomentumN}} acciones por momentum 12-1</h3>
+{{if .PortfolioTopMomentumRanked}}
+<div class="card">
+	<p>Retorno anual esperado: <strong>{{printf "%.2f%%" (mulf .PortfolioTopMomentum.ExpectedReturn 100)}}</strong> &middot; Volatilidad anual: <strong>{{printf "%.2f%%" (mulf .PortfolioTopMomentum.Volatility 100)}}</strong> &middot; Sharpe ratio: <strong>{{printf "%.2f" .PortfolioTopMomentum.SharpeRatio}}</strong></p>
+</div>
+{{end}}
+{{template "resultsTable" portfolioTab "pf-topn" .PortfolioTopMomentumRanked}}
+
+<h3>Universo completo de mega-caps</h3>
+{{if .PortfolioFullUniverseRanked}}
+<div class="card">
+	<p>Retorno anual esperado: <strong>{{printf "%.2f%%" (mulf .PortfolioFullUniverse.ExpectedReturn 100)}}</strong> &middot; Volatilidad anual: <strong>{{printf "%.2f%%" (mulf .PortfolioFullUniverse.Volatility 100)}}</strong> &middot; Sharpe ratio: <strong>{{printf "%.2f" .PortfolioFullUniverse.SharpeRatio}}</strong></p>
+</div>
+{{end}}
+{{template "resultsTable" portfolioTab "pf-full" .PortfolioFullUniverseRanked}}
+
 <div id="chart-tooltip" class="chart-tooltip" role="tooltip"></div>
 
 <script>
@@ -252,7 +272,7 @@ function paginateTable(containerId, pageSize) {
 	render();
 }
 
-['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4', 'mc-m6', 'mc-m7', 'mc-m8', 'mc-m9', 'mc-m10', 'mc-m11'].forEach(function (id) {
+['etf-m1', 'etf-m2', 'mc-m1', 'mc-m2', 'mc-m3', 'mc-m4', 'mc-m6', 'mc-m7', 'mc-m8', 'mc-m9', 'mc-m10', 'mc-m11', 'pf-topn', 'pf-full'].forEach(function (id) {
 	paginateTable(id, 10);
 });
 
@@ -376,16 +396,17 @@ function paginateTable(containerId, pageSize) {
 {{if not .Results}}
 <p class="note">Sin datos suficientes para este modelo.</p>
 {{else}}
+{{$isPct := .IsPercent}}
 <div id="{{.ID}}">
 <div class="table-scroll">
 <table>
-<thead><tr><th>Rank</th><th>Ticker</th><th>Score</th></tr></thead>
+<thead><tr><th>Rank</th><th>Ticker</th><th>{{if $isPct}}Peso{{else}}Score{{end}}</th></tr></thead>
 <tbody>
 {{range .Results}}
 <tr{{if le .Rank 10}} class="top"{{end}}>
 	<td>{{.Rank}}</td>
 	<td><a class="ticker-link" href="{{yahooQuoteURL .Symbol}}" target="_blank" rel="noopener noreferrer"><code>{{.Symbol}}</code></a></td>
-	<td class="{{if ge .Score 0.0}}score-pos{{else}}score-neg{{end}}">{{printf "%.4f" .Score}}</td>
+	<td class="{{if ge .Score 0.0}}score-pos{{else}}score-neg{{end}}">{{if $isPct}}{{printf "%.2f%%" (mulf .Score 100)}}{{else}}{{printf "%.4f" .Score}}{{end}}</td>
 </tr>
 {{end}}
 </tbody>

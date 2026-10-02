@@ -69,6 +69,16 @@ type Config struct {
 		// Modelo 6 (momentum acelerado): meses del tramo "corto" a comparar
 		// contra el tramo largo (LookbackMonthsLong).
 		AccelShortMonths int `yaml:"accel_short_months"`
+
+		// Simulacion de Markowitz (construccion de cartera, no es un modelo
+		// de momentum — ver Modelos_de_Momentum.md, seccion "Construccion
+		// de cartera").
+		MarkowitzLookbackDays int `yaml:"markowitz_lookback_days"`
+		MarkowitzSimulations  int `yaml:"markowitz_simulations"`
+		// Cantidad de acciones mega-cap (las de mejor ranking segun el
+		// modelo 1, momentum 12-1) sobre las que corre la variante
+		// "top momentum" de la simulacion de Markowitz.
+		MarkowitzTopMomentumN int `yaml:"markowitz_top_momentum_n"`
 	} `yaml:"models"`
 }
 
@@ -143,6 +153,10 @@ func (c *Config) Validate() error {
 	check(c.Models.AccelShortMonths > 0, "models.accel_short_months debe ser > 0")
 	check(c.Models.AccelShortMonths < c.Models.LookbackMonthsLong,
 		"models.accel_short_months debe ser menor que models.lookback_months_long")
+	check(c.Models.MarkowitzLookbackDays > 0, "models.markowitz_lookback_days debe ser > 0")
+	check(c.Models.MarkowitzSimulations >= 100,
+		"models.markowitz_simulations debe ser >= 100 (muy pocas simulaciones no exploran el espacio de carteras)")
+	check(c.Models.MarkowitzTopMomentumN > 0, "models.markowitz_top_momentum_n debe ser > 0")
 
 	if len(errs) > 0 {
 		return fmt.Errorf("valores invalidos:\n  - %s", strings.Join(errs, "\n  - "))

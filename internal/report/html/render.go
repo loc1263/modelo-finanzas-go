@@ -36,6 +36,10 @@ var templateSource string
 type TableTab struct {
 	ID      string
 	Results []sqlite.ModelResult
+	// IsPercent indica que Score es en realidad un peso de cartera
+	// (fraccion entre 0 y 1) y debe mostrarse como porcentaje con su propio
+	// encabezado ("Peso"), en vez de un score crudo — ver portfolioTab.
+	IsPercent bool
 }
 
 // ChartBar es una barra del mini-grafico de los primeros 5 tickers de un
@@ -60,6 +64,9 @@ var funcMap = template.FuncMap{
 	"mulf": func(a, b float64) float64 { return a * b },
 	"tableTab": func(id string, results []sqlite.ModelResult) TableTab {
 		return TableTab{ID: id, Results: results}
+	},
+	"portfolioTab": func(id string, results []sqlite.ModelResult) TableTab {
+		return TableTab{ID: id, Results: results, IsPercent: true}
 	},
 	"chartTab": buildChartTab,
 	"yahooQuoteURL": func(symbol string) string {

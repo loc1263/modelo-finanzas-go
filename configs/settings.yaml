@@ -55,3 +55,10 @@ models:
   vol_scaling_lookback_days: 126
   # Modelo 6 (momentum acelerado): meses del tramo corto vs lookback_months_long.
   accel_short_months: 3
+  # Simulacion de Markowitz (construccion de cartera, no es un modelo de
+  # momentum, ver Modelos_de_Momentum.md): ventana de retornos diarios para
+  # estimar medias y covarianza, cantidad de carteras aleatorias simuladas,
+  # y cantidad de acciones top-momentum usadas en la variante "top momentum".
+  markowitz_lookback_days: 252
+  markowitz_simulations: 10000
+  markowitz_top_momentum_n: 10

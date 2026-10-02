@@ -41,3 +41,8 @@ models:
   vol_scaling_target_vol_annual: 0.12
   vol_scaling_lookback_days: 126
   accel_short_months: 3
+  markowitz_lookback_days: 252
+  # Menos simulaciones que en produccion para que las corridas de prueba
+  # con -limit sean rapidas; sigue siendo >= 100.
+  markowitz_simulations: 2000
+  markowitz_top_momentum_n: 10

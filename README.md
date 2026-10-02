@@ -28,6 +28,7 @@ internal/yahoo/         Cliente HTTP para la API publica de Yahoo Finance
 internal/famafrench/    Descarga y parseo de los datasets de Kenneth French
 internal/storage/sqlite Persistencia (precios, factores, resultados)
 internal/models/        Los modelos de momentum (uno por paquete) + helpers matematicos (common/)
+                        + markowitz/ (construccion de cartera, no es un modelo de momentum)
 internal/pipeline/      Orquestador: descarga -> calculo -> persistencia
 internal/report/html/   Generacion del reporte HTML
 internal/logging/       Logger a archivo + consola
@@ -54,6 +55,9 @@ Esto, con la configuracion por defecto (`configs/settings.yaml`):
 3. Descarga los factores mensuales de Fama-French (3 factores, 5 factores y
    momentum) desde la Kenneth French Data Library.
 4. Calcula los modelos 1 y 2 para los ETFs, y 1 a 11 para las mega-caps.
+   Ademas corre una simulacion de Markowitz (construccion de cartera, no es
+   un modelo de momentum) sobre las mega-caps, en dos variantes: top-N
+   acciones por momentum 12-1, y universo completo.
 5. Guarda todo en `data/modelo_finanzas.db` (SQLite).
 6. Genera `output/reporte_<timestamp>.html` y actualiza
    `output/reporte_ultimo.html` (siempre apunta a la corrida mas reciente).
@@ -185,6 +189,13 @@ cada paquete en `internal/models/`. Dos convenciones transversales:
   precios, que exige una sesion autenticada (cookie + "crumb") en vez de
   ser totalmente publico — ver la seccion "Datos y fuentes" mas abajo y
   `Modelos_de_Momentum.md` para el detalle y el riesgo de fragilidad.
+
+La simulacion de Markowitz (construccion de cartera, no es un modelo de
+momentum) no sigue la convencion "12-1": es una simulacion aleatoria, pero
+reproducible — el generador de numeros aleatorios se siembra segun el dia
+de la corrida (`AsOf`), asi que reejecutar el pipeline el mismo dia siempre
+encuentra la misma cartera optima. Ver `Modelos_de_Momentum.md`, seccion
+"Construccion de cartera", para el detalle.
 
 ## Datos y fuentes
 
