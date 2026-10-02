@@ -1,3 +1,5 @@
+// Autor: Luis Oyanader C
+//
 // Comando principal: corre el pipeline completo de analisis de momentum
 // sobre ETFs de Vanguard y acciones mega-cap de EEUU, y genera el reporte HTML.
 package main
