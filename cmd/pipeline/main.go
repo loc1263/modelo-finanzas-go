@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	_ "time/tzdata" // gohoo usa la zona del exchange; en Windows sin Go instalado no hay base de zonas
+
 	"modelofinanzas/internal/config"
 	"modelofinanzas/internal/famafrench"
 	"modelofinanzas/internal/logging"

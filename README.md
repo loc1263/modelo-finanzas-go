@@ -23,8 +23,8 @@ implementado) y de los factores de Fama-French.
 
 ```
 cmd/pipeline/           Comando principal (main.go, history.go)
-internal/httpclient/    User-Agent de navegador compartido por yahoo y famafrench
-internal/yahoo/         Cliente HTTP para la API publica de Yahoo Finance
+internal/httpclient/    User-Agent de navegador usado por famafrench
+internal/yahoo/         Adaptador fino sobre github.com/loc1263/gohoo (precios y earnings de Yahoo Finance)
 internal/famafrench/    Descarga y parseo de los datasets de Kenneth French
 internal/storage/sqlite Persistencia (precios, factores, resultados)
 internal/models/        Los modelos de momentum (uno por paquete) + helpers matematicos (common/)
@@ -200,7 +200,7 @@ encuentra la misma cartera optima. Ver `Modelos_de_Momentum.md`, seccion
 ## Datos y fuentes
 
 - Precios: `query1.finance.yahoo.com/v8/finance/chart/{symbol}` (la misma API
-  que usa `yfinance` de Python por debajo). Cliente propio en
+  que usa `yfinance` de Python por debajo). Via la libreria gohoo, adaptada en
   `internal/yahoo`, con pausas y reintentos configurables para no ser
   bloqueado.
 - Factores de Fama-French: Kenneth R. French Data Library (Dartmouth), en
@@ -208,7 +208,7 @@ encuentra la misma cartera optima. Ver `Modelos_de_Momentum.md`, seccion
 - Earnings (modelo 8): `query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}`
   (modulo `earningsHistory`). A diferencia de los precios, este endpoint
   exige una sesion autenticada (cookie + "crumb" de Yahoo, el mismo
-  mecanismo que usa `yfinance` por debajo) — implementado en
+  mecanismo que usa `yfinance` por debajo) — lo maneja gohoo; adaptado en
   `internal/yahoo/earnings.go`. No esta documentado oficialmente por Yahoo,
   asi que es mas fragil que el resto del pipeline; ver
   `Modelos_de_Momentum.md` si empieza a fallar.

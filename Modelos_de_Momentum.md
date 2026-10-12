@@ -217,8 +217,8 @@ mecanismo que usa `yfinance` (Python) por debajo. Se verificó a mano con
 `curl` antes de implementarlo (el endpoint devuelve
 `{"error":{"code":"Unauthorized","description":"Invalid Crumb"}}` si se lo
 llama directo, sin el paso de la cookie+crumb primero) — está implementado
-en `internal/yahoo/earnings.go`, con el mismo cliente HTTP (y su cookie
-jar) que usa `internal/yahoo/client.go` para los precios.
+en `internal/yahoo/earnings.go`, via la libreria gohoo (que maneja la cookie y
+el crumb) — la misma que usa `internal/yahoo/client.go` para los precios.
 
 **Importante — esto es más frágil que el resto del pipeline:** Yahoo no
 documenta oficialmente este mecanismo, así que podría cambiarlo sin aviso

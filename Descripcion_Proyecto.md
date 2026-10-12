@@ -47,7 +47,7 @@ de cartera: simulación de Markowitz".
 2. Separado en paquetes por responsabilidad (datos de Yahoo, datos de Fama-French, storage, un paquete por modelo, orquestación del pipeline, reporte HTML) para que sea fácil de entender, mantener y escalar.
 3. El pipeline corre como un único binario Go (`cmd/pipeline`), sin un orquestador externo en otro lenguaje.
 4. El resultado final es un reporte en HTML (no se genera PDF — decisión explícita, para no cargar con una librería extra).
-5. Los precios se descargan con un cliente HTTP propio contra el endpoint público de Yahoo Finance (el mismo que usa `yfinance` de Python por debajo), en vez de depender de una librería de terceros para Go (la que existía, `piquette/finance-go`, estaba rota).
+5. Los precios se descargan con la librería [gohoo](https://github.com/loc1263/gohoo) (cliente Go de los endpoints de Yahoo Finance, adaptada en `internal/yahoo`) (el mismo que usa `yfinance` de Python por debajo), en vez de depender de una librería de terceros para Go (la que existía, `piquette/finance-go`, estaba rota).
 6. El pipeline es reejecutable: correrlo varias veces el mismo día no duplica precios ni resultados (upsert por fecha), y hay una opción para forzar una recarga limpia del día en curso si hace falta.
 7. Los datos de earnings (modelo 8) también se bajan de Yahoo, pero de un endpoint distinto al de precios que exige una sesión autenticada (cookie + "crumb") en vez de ser totalmente público. Es el mismo mecanismo que usa `yfinance` por debajo; no está documentado oficialmente por Yahoo, así que es más frágil que el resto del pipeline — ver `Modelos_de_Momentum.md` y `CLAUDE.md` para el detalle.
 
